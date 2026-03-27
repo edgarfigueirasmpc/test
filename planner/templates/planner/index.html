@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cronologia de trabajo</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4efe6;
+            --card: #fffaf2;
+            --card-alt: #f8f1e7;
+            --text: #2d241d;
+            --muted: #6c5b4b;
+            --accent: #bf6b2c;
+            --accent-dark: #8b4513;
+            --accent-soft: #f4ddc7;
+            --border: #d9c8b4;
+            --success: #2e7d32;
+            --danger: #a63d40;
+            --shadow: 0 18px 45px rgba(97, 71, 48, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, #fff7ed 0%, transparent 30%),
+                radial-gradient(circle at top right, #f6e6d3 0%, transparent 28%),
+                linear-gradient(180deg, #f7f0e6 0%, #efe1cf 100%);
+        }
+
+        main {
+            width: min(1420px, calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 1.6rem 0 3rem;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin-top: 0;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            background: rgba(255, 250, 242, 0.92);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            padding: 1.5rem 1.6rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 1.4rem;
+        }
+
+        .topbar p,
+        .subtitle,
+        .meta,
+        .gantt-legend,
+        label,
+        .logs-table td,
+        .task-note {
+            color: var(--muted);
+        }
+
+        .button-primary,
+        .button-link {
+            border: none;
+            border-radius: 999px;
+            padding: 0.9rem 1.25rem;
+            background: var(--accent);
+            color: white;
+            font: inherit;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(191, 107, 44, 0.22);
+        }
+
+        .button-link.secondary,
+        .button-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .panel {
+            background: rgba(255, 250, 242, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 1.35rem;
+            box-shadow: 0 10px 30px rgba(97, 71, 48, 0.06);
+        }
+
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1rem;
+        }
+
+        .messages li {
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #edf7ee;
+            color: var(--success);
+            border: 1px solid #b6ddb9;
+        }
+
+        .project + .project {
+            margin-top: 1rem;
+        }
+
+        .project {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 1rem;
+            background: var(--card);
+        }
+
+        .project-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .chip {
+            display: inline-block;
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--accent-dark);
+            font-size: 0.9rem;
+        }
+
+        .stats,
+        .task-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+            margin: 0.85rem 0;
+        }
+
+        .stats span,
+        .task-stats span {
+            background: var(--card-alt);
+            border-radius: 12px;
+            padding: 0.4rem 0.7rem;
+            border: 1px solid var(--border);
+        }
+
+        .gantt {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 241, 231, 0.9));
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow-x: auto;
+        }
+
+        .gantt-legend {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+            font-size: 0.92rem;
+        }
+
+        .gantt-legend span::before {
+            content: "";
+            display: inline-block;
+            width: 0.85rem;
+            height: 0.85rem;
+            border-radius: 999px;
+            margin-right: 0.45rem;
+            vertical-align: middle;
+        }
+
+        .legend-base::before {
+            background: #ccb7a0;
+        }
+
+        .legend-project::before {
+            background: var(--accent);
+        }
+
+        .legend-real::before {
+            background: #2e7d32;
+        }
+
+        .gantt-scale {
+            width: max-content;
+            min-width: 100%;
+        }
+
+        .gantt-axis,
+        .gantt-row {
+            display: grid;
+            grid-template-columns: 250px auto;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .gantt-axis {
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .gantt-axis-scale,
+        .gantt-lane {
+            display: grid;
+            gap: 0;
+            align-items: center;
+        }
+
+        .gantt-axis-scale {
+            min-height: 1.4rem;
+            width: calc(var(--gantt-days) * var(--day-width));
+            grid-template-columns: repeat(var(--gantt-days), var(--day-width));
+        }
+
+        .gantt-tick {
+            font-size: 0.8rem;
+            color: var(--muted);
+            text-align: center;
+            white-space: nowrap;
+            justify-self: center;
+        }
+
+        .gantt-row + .gantt-row {
+            margin-top: 0.85rem;
+        }
+
+        .gantt-label {
+            font-size: 0.95rem;
+        }
+
+        .gantt-progress {
+            margin-top: 0.3rem;
+            font-size: 0.84rem;
+            color: var(--muted);
+        }
+
+        .gantt-track {
+            display: grid;
+            gap: 0.35rem;
+            align-items: center;
+            min-height: 3.2rem;
+            width: calc(var(--gantt-days) * var(--day-width));
+            border-radius: 14px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0.55));
+            border: 1px solid rgba(217, 200, 180, 0.85);
+            padding: 0.4rem;
+        }
+
+        .gantt-bar {
+            border-radius: 999px;
+            min-height: 0.5rem;
+        }
+
+        .gantt-bar.base {
+            background: #ccb7a0;
+        }
+
+        .gantt-bar.projected {
+            min-height: 0.72rem;
+            background: var(--accent);
+            box-shadow: 0 6px 10px rgba(191, 107, 44, 0.2);
+        }
+
+        .gantt-bar.actual {
+            min-height: 0.48rem;
+            background: #2e7d32;
+        }
+
+        .task-list {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0 0;
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .task-list li {
+            border-left: 4px solid var(--accent);
+            background: #fff;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+        }
+
+        .timeline {
+            margin-top: 0.45rem;
+        }
+
+        .task-note {
+            margin-top: 0.35rem;
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+
+        .logs-panel {
+            margin-top: 1.4rem;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .logs-table th,
+        .logs-table td {
+            padding: 0.8rem 0.6rem;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .logs-table th {
+            color: var(--text);
+        }
+
+        .empty {
+            padding: 1rem;
+            border: 1px dashed var(--border);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.45);
+        }
+
+        .modal-shell {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(45, 36, 29, 0.42);
+            z-index: 40;
+        }
+
+        .modal-shell.is-open {
+            display: flex;
+        }
+
+        .modal {
+            width: min(760px, 100%);
+            max-height: calc(100vh - 2rem);
+            overflow: auto;
+            background: rgba(255, 250, 242, 0.98);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 1.35rem;
+            box-shadow: 0 22px 55px rgba(45, 36, 29, 0.24);
+        }
+
+        .modal-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        form p {
+            margin: 0 0 1rem;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            margin-top: 0.35rem;
+            padding: 0.78rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: white;
+            font: inherit;
+            color: inherit;
+        }
+
+        .errors {
+            color: var(--danger);
+            margin-top: 0.25rem;
+            font-size: 0.95rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 940px) {
+            .topbar,
+            .project-head {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .gantt-axis,
+            .gantt-row {
+                grid-template-columns: 1fr;
+            }
+
+            .gantt-scale {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <section class="topbar panel">
+        <div>
+            <h1>Cronologia de trabajo</h1>
+            <p class="subtitle">Planificacion, progreso real y desplazamientos acumulados en una vista mas amplia.</p>
+            <p class="meta">Capacidad diaria base: {{ daily_capacity_hours }} h. Tiempo dedicado a tareas externas o no planificadas: {{ external_hours }} h.</p>
+        </div>
+        <button type="button" class="button-primary" data-open-modal>
+            {% if edit_entry %}Seguir editando registro{% else %}Anadir registro diario{% endif %}
+        </button>
+    </section>
+
+    <section class="panel">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <h2>Linea de tiempo</h2>
+        {% if projects %}
+            {% for item in projects %}
+                <article class="project">
+                    <div class="project-head">
+                        <div>
+                            <div class="chip">{{ item.project.get_status_display }}</div>
+                            <h3>{{ item.project.name }}</h3>
+                            <p>{{ item.project.description|default:"Sin descripcion." }}</p>
+                        </div>
+                    </div>
+                    <div class="stats">
+                        <span>Inicio previsto: {{ item.project.planned_start_date|date:"d/m/Y" }}</span>
+                        <span>Estimado: {{ item.estimated_hours }} h</span>
+                        <span>Real: {{ item.actual_hours }} h</span>
+                        <span>Pendiente: {{ item.remaining_hours }} h</span>
+                        <span>Fin base: {% if item.baseline_end %}{{ item.baseline_end|date:"d/m/Y" }}{% else %}-{% endif %}</span>
+                        <span>Fin proyectado: {% if item.projected_end %}{{ item.projected_end|date:"d/m/Y" }}{% else %}-{% endif %}</span>
+                        <span>Retraso acumulado: {{ item.delay_days }} dia{{ item.delay_days|pluralize:"s" }}</span>
+                    </div>
+                    {% if item.gantt_start and item.gantt_end %}
+                        <section class="gantt">
+                            <div class="gantt-legend">
+                                <span class="legend-base">Plan base</span>
+                                <span class="legend-project">Proyeccion actual</span>
+                                <span class="legend-real">Trabajo real registrado</span>
+                            </div>
+                            <div class="gantt-scale" style="--gantt-days: {{ item.gantt_days }}; --day-width: 52px;">
+                                <div class="gantt-axis">
+                                    <div></div>
+                                    <div class="gantt-axis-scale">
+                                        {% for tick in item.gantt_ticks %}
+                                            <span class="gantt-tick" style="grid-column: {{ tick.day_index }};">{{ tick.label }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% for task in item.tasks %}
+                                    <div class="gantt-row">
+                                        <div class="gantt-label">
+                                            <strong>{{ task.task.order }}. {{ task.task.name }}</strong>
+                                            <div class="gantt-progress">{{ task.progress_percent }}% completado</div>
+                                            {% if task.inferred_from_status %}
+                                                <div class="task-note">Avance inferido porque la tarea esta marcada como completada en admin, aunque no tenga registros diarios.</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="gantt-track">
+                                            <div class="gantt-lane" style="grid-template-columns: repeat({{ item.gantt_days }}, var(--day-width));">
+                                                {% if task.gantt.baseline_span %}
+                                                    <div class="gantt-bar base" style="grid-column: {{ task.gantt.baseline_start }} / span {{ task.gantt.baseline_span }};"></div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="gantt-lane" style="grid-template-columns: repeat({{ item.gantt_days }}, var(--day-width));">
+                                                {% if task.gantt.projected_span %}
+                                                    <div class="gantt-bar projected" style="grid-column: {{ task.gantt.projected_start }} / span {{ task.gantt.projected_span }};"></div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="gantt-lane" style="grid-template-columns: repeat({{ item.gantt_days }}, var(--day-width));">
+                                                {% if task.gantt.actual_span %}
+                                                    <div class="gantt-bar actual" style="grid-column: {{ task.gantt.actual_start }} / span {{ task.gantt.actual_span }};"></div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </section>
+                    {% endif %}
+                    <ul class="task-list">
+                        {% for task in item.tasks %}
+                            <li>
+                                <strong>{{ task.task.order }}. {{ task.task.name }}</strong>
+                                <div class="task-stats">
+                                    <span>Estimado: {{ task.estimated_hours }} h</span>
+                                    <span>Real: {{ task.actual_hours }} h</span>
+                                    <span>Pendiente: {{ task.remaining_hours }} h</span>
+                                    <span>Estado: {{ task.task.get_status_display }}</span>
+                                </div>
+                                {% if task.inferred_from_status %}
+                                    <div class="task-note">Se muestra como realizada por su estado actual, pero todavia no hay registro diario asociado.</div>
+                                {% endif %}
+                                <div class="timeline">
+                                    Base: {% if task.baseline_start %}{{ task.baseline_start|date:"d/m/Y" }}{% else %}-{% endif %}
+                                    ->
+                                    {% if task.baseline_end %}{{ task.baseline_end|date:"d/m/Y" }}{% else %}-{% endif %}
+                                </div>
+                                <div class="timeline">
+                                    Proyeccion actual: {% if task.projected_start %}{{ task.projected_start|date:"d/m/Y" }}{% else %}-{% endif %}
+                                    ->
+                                    {% if task.projected_end %}{{ task.projected_end|date:"d/m/Y" }}{% else %}-{% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </article>
+            {% endfor %}
+        {% else %}
+            <div class="empty">
+                No hay proyectos todavia. Puedes crearlos desde el admin y la cronologia aparecera aqui.
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="panel logs-panel">
+        <h2>Entradas recientes</h2>
+        {% if recent_logs %}
+            <table class="logs-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Proyecto / parte</th>
+                        <th>Tiempo</th>
+                        <th>Descripcion</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                        <tr>
+                            <td>{{ log.date|date:"d/m/Y" }}</td>
+                            <td>{{ log.get_work_type_display }}</td>
+                            <td>
+                                {% if log.project %}{{ log.project.name }}{% else %}-{% endif %}
+                                {% if log.task %}<br>{{ log.task.name }}{% endif %}
+                            </td>
+                            <td>{{ log.actual_hours }} h</td>
+                            <td>{{ log.description }}</td>
+                            <td><a href="{% url 'planner:index' %}?edit={{ log.pk }}">Editar</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty">
+                Aun no hay registros diarios.
+            </div>
+        {% endif %}
+    </section>
+</main>
+
+<div class="modal-shell{% if show_form_modal %} is-open{% endif %}" id="worklog-modal">
+    <div class="modal">
+        <div class="modal-head">
+            <div>
+                <h2>{% if edit_entry %}Editar registro{% else %}Anadir registro diario{% endif %}</h2>
+                <p class="meta">Guarda el trabajo del dia y la cronologia se recalculara al instante.</p>
+            </div>
+            <button type="button" class="button-secondary" data-close-modal>Cerrar</button>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            {% if edit_entry %}
+                <input type="hidden" name="entry_id" value="{{ edit_entry.pk }}">
+            {% endif %}
+            {% for field in form %}
+                <p>
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {% for error in field.errors %}
+                        <div class="errors">{{ error }}</div>
+                    {% endfor %}
+                </p>
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <div class="errors">{{ error }}</div>
+            {% endfor %}
+            <div class="actions">
+                <button type="submit" class="button-primary">Guardar</button>
+                <button type="button" class="button-secondary" data-close-modal>Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const modal = document.getElementById("worklog-modal");
+        if (!modal) return;
+
+        const openButtons = document.querySelectorAll("[data-open-modal]");
+        const closeButtons = document.querySelectorAll("[data-close-modal]");
+
+        const openModal = () => modal.classList.add("is-open");
+        const closeModal = () => modal.classList.remove("is-open");
+
+        openButtons.forEach((button) => button.addEventListener("click", openModal));
+        closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") closeModal();
+        });
+    })();
+</script>
+</body>
+</html>
