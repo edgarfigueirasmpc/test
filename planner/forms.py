@@ -1,48 +1,86 @@
 from django import forms
+from django.contrib.auth import get_user_model
 
-from .models import ProjectTask, WorkLog
+from .models import Project, WorkLog
+
+User = get_user_model()
 
 
-class TaskChoiceField(forms.ModelChoiceField):
-    def label_from_instance(self, obj):
-        return f"{obj.project.name} / {obj.order}. {obj.name}"
+class ProjectForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        ordered_users = User.objects.order_by("username")
+        self.fields["requested_by"].queryset = ordered_users
+        self.fields["assigned_users"].queryset = ordered_users
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get("name")
+        planned_start_date = cleaned_data.get("planned_start_date")
+
+        if name and planned_start_date:
+            duplicate_qs = Project.objects.filter(
+                name__iexact=name.strip(),
+                planned_start_date=planned_start_date,
+            )
+            if self.instance.pk:
+                duplicate_qs = duplicate_qs.exclude(pk=self.instance.pk)
+            if duplicate_qs.exists():
+                raise forms.ValidationError(
+                    "Ya existe un proyecto con ese nombre y fecha de inicio."
+                )
+
+        return cleaned_data
+
+    class Meta:
+        model = Project
+        fields = [
+            "name",
+            "description",
+            "planned_start_date",
+            "delivery_date",
+            "requested_by",
+            "assigned_users",
+            "is_visible",
+            "estimated_hours",
+            "color",
+            "status",
+            "notes",
+        ]
+        widgets = {
+            "planned_start_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "delivery_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "notes": forms.Textarea(attrs={"rows": 2}),
+            "color": forms.TextInput(attrs={"type": "color"}),
+            "requested_by": forms.CheckboxSelectMultiple(),
+            "assigned_users": forms.CheckboxSelectMultiple(),
+        }
 
 
 class WorkLogForm(forms.ModelForm):
-    task = TaskChoiceField(
-        queryset=ProjectTask.objects.select_related("project").order_by(
-            "project__planned_start_date",
-            "project__name",
-            "order",
-        ),
-        required=False,
-        label="Parte del proyecto",
-    )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        ordered_users = User.objects.order_by("username")
+        self.fields["requested_by"].queryset = ordered_users
+        self.fields["assigned_users"].queryset = ordered_users
 
     class Meta:
         model = WorkLog
         fields = [
             "date",
+            "requested_by",
+            "assigned_users",
+            "work_type",
             "project",
-            "task",
             "description",
             "actual_hours",
-            "work_type",
             "notes",
         ]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "description": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 2}),
+            "requested_by": forms.CheckboxSelectMultiple(),
+            "assigned_users": forms.CheckboxSelectMultiple(),
         }
-
-    def clean(self):
-        cleaned_data = super().clean()
-        task = cleaned_data.get("task")
-        project = cleaned_data.get("project")
-
-        if task and not project:
-            cleaned_data["project"] = task.project
-            self.instance.project = task.project
-
-        return cleaned_data

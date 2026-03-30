@@ -1,42 +1,56 @@
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+
+User = get_user_model()
 
 
 class Project(models.Model):
     class Status(models.TextChoices):
         PLANNED = "planned", "Planificado"
         IN_PROGRESS = "in_progress", "En progreso"
-        BLOCKED = "blocked", "Bloqueado"
         COMPLETED = "completed", "Completado"
-
-    class Priority(models.IntegerChoices):
-        LOW = 1, "Baja"
-        MEDIUM = 2, "Media"
-        HIGH = 3, "Alta"
 
     name = models.CharField("nombre", max_length=200)
     description = models.TextField("descripcion", blank=True)
-    planned_start_date = models.DateField("fecha de inicio prevista")
+    planned_start_date = models.DateField("fecha de inicio")
+    delivery_date = models.DateField("fecha de entrega", blank=True, null=True)
+    requested_by = models.ManyToManyField(
+        User,
+        related_name="requested_projects",
+        verbose_name="solicitado por",
+        blank=True,
+    )
+    assigned_users = models.ManyToManyField(
+        User,
+        related_name="assigned_projects",
+        verbose_name="usuarios asignados",
+        blank=True,
+    )
+    color = models.CharField("color", max_length=7, default="#6b7280")
+    is_visible = models.BooleanField("visible en calendario", default=True)
+    estimated_hours = models.DecimalField(
+        "horas estimadas",
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     status = models.CharField(
         "estado",
         max_length=20,
         choices=Status.choices,
         default=Status.PLANNED,
     )
-    priority = models.PositiveSmallIntegerField(
-        "prioridad",
-        choices=Priority.choices,
-        default=Priority.MEDIUM,
-    )
     notes = models.TextField("observaciones", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["planned_start_date", "-priority", "name"]
+        ordering = ["planned_start_date", "name"]
         verbose_name = "proyecto"
         verbose_name_plural = "proyectos"
 
@@ -95,12 +109,21 @@ class ProjectTask(models.Model):
 class WorkLog(models.Model):
     class WorkType(models.TextChoices):
         PROJECT = "project_work", "Trabajo de proyecto"
-        EXTERNAL = "external_task", "Tarea externa"
-        INTERRUPTION = "interruption", "Interrupcion"
-        MAINTENANCE = "maintenance", "Mantenimiento"
-        OTHER = "other", "Otros"
+        OTHER = "other_work", "Trabajo no asociado a proyecto"
 
     date = models.DateField("fecha")
+    requested_by = models.ManyToManyField(
+        User,
+        related_name="requested_work_logs",
+        verbose_name="solicitado por",
+        blank=True,
+    )
+    assigned_users = models.ManyToManyField(
+        User,
+        related_name="assigned_work_logs",
+        verbose_name="usuarios que realizan",
+        blank=True,
+    )
     project = models.ForeignKey(
         Project,
         on_delete=models.SET_NULL,
@@ -119,7 +142,7 @@ class WorkLog(models.Model):
     )
     description = models.TextField("descripcion de lo realizado")
     actual_hours = models.DecimalField(
-        "tiempo real invertido (horas)",
+        "horas dedicadas",
         max_digits=7,
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))],
@@ -145,14 +168,11 @@ class WorkLog(models.Model):
     def clean(self):
         errors = {}
 
-        if self.task and self.project and self.task.project_id != self.project_id:
-            errors["task"] = "La parte seleccionada no pertenece al proyecto indicado."
+        if self.work_type == self.WorkType.PROJECT and not self.project:
+            errors["project"] = "Selecciona un proyecto para el trabajo de proyecto."
 
-        if self.task and self.work_type != self.WorkType.PROJECT:
-            errors["work_type"] = "Solo se puede asignar una parte a trabajo de proyecto."
-
-        if self.work_type == self.WorkType.PROJECT and not self.project and not self.task:
-            errors["project"] = "Indica un proyecto o una parte para el trabajo de proyecto."
+        if self.work_type == self.WorkType.OTHER and self.project:
+            errors["project"] = "El trabajo no asociado a proyecto debe guardarse sin proyecto."
 
         if errors:
             raise ValidationError(errors)
@@ -161,3 +181,20 @@ class WorkLog(models.Model):
         if self.task and not self.project:
             self.project = self.task.project
         super().save(*args, **kwargs)
+
+
+class PlannerSettings(models.Model):
+    show_other_work = models.BooleanField("mostrar trabajo fuera de proyecto", default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "configuracion del planificador"
+        verbose_name_plural = "configuracion del planificador"
+
+    def __str__(self):
+        return "Configuracion del planificador"
+
+    @classmethod
+    def get_solo(cls):
+        settings, _ = cls.objects.get_or_create(pk=1)
+        return settings
