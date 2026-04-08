@@ -81,9 +81,6 @@ def database_config_from_env():
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-local-dev-key-change-me")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_bool("DEBUG", default=True)
-
 default_allowed_hosts = [
     "127.0.0.1",
     "localhost",
@@ -91,6 +88,13 @@ default_allowed_hosts = [
     "192.168.1.36",
 ]
 render_external_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+is_render_environment = bool(render_external_hostname)
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# En Render se inyecta RENDER_EXTERNAL_HOSTNAME automaticamente, asi que
+# si DEBUG no esta definido forzamos un comportamiento de produccion.
+DEBUG = env_bool("DEBUG", default=not is_render_environment)
+
 if render_external_hostname:
     default_allowed_hosts.append(render_external_hostname)
 
@@ -116,6 +120,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -186,11 +191,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
