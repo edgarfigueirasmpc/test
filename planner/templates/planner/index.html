@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Planificador de proyectos</title>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.20/index.global.min.js"></script>
+    <style>
+        :root {
+            --bg: #f3f4f6;
+            --card: rgba(255, 255, 255, 0.92);
+            --card-strong: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #d9dde3;
+            --accent: #6b7280;
+            --accent-strong: #4b5563;
+            --actual: #7c8794;
+            --shadow: 0 20px 50px rgba(15, 23, 42, 0.06);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, #ffffff 0%, transparent 28%),
+                linear-gradient(180deg, #f6f7f9 0%, #edf0f4 100%);
+        }
+
+        main {
+            width: min(1480px, calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 1.5rem 0 3rem;
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 1.4rem;
+            box-shadow: var(--shadow);
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1.2rem;
+        }
+
+        .meta,
+        label,
+        .logs-table td,
+        .project-card p {
+            color: var(--muted);
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 999px;
+            padding: 0.8rem 1.15rem;
+            font: inherit;
+            text-decoration: none;
+            color: white;
+            background: var(--accent-strong);
+            cursor: pointer;
+            box-shadow: 0 10px 18px rgba(75, 85, 99, 0.14);
+            transition: transform 160ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+        }
+
+        .button.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 22px rgba(75, 85, 99, 0.16);
+        }
+
+        .button.secondary:hover {
+            background: #f8fafc;
+            border-color: #c8d0da;
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+        }
+
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1rem;
+        }
+
+        .messages li {
+            padding: 0.75rem 0.9rem;
+            border-radius: 12px;
+            background: #edf7ee;
+            color: var(--actual);
+            border: 1px solid #b8ddb9;
+        }
+
+        .summary {
+            margin: 0.1rem 0 1rem;
+        }
+
+        .info-panel {
+            border: 1px dashed #d5dbe5;
+            border-radius: 16px;
+            background: rgba(248, 250, 252, 0.72);
+            overflow: hidden;
+        }
+
+        .info-panel summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.8rem 0.95rem;
+            cursor: pointer;
+            list-style: none;
+            color: var(--muted);
+            font-size: 0.98rem;
+            font-weight: 600;
+        }
+
+        .info-panel summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .info-panel summary::before {
+            content: "i";
+            display: inline-grid;
+            place-items: center;
+            width: 1.35rem;
+            height: 1.35rem;
+            border-radius: 999px;
+            background: #eef2f7;
+            border: 1px solid #d5dbe5;
+            color: var(--accent-strong);
+            font-size: 0.82rem;
+            font-weight: 700;
+            font-family: Georgia, "Times New Roman", serif;
+        }
+
+        .info-panel[open] summary {
+            border-bottom: 1px dashed #d5dbe5;
+        }
+
+        .info-panel-body {
+            padding: 0.85rem 0.95rem 1rem;
+            color: var(--muted);
+            font-size: 0.98rem;
+            line-height: 1.7;
+        }
+
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 1.1rem;
+        }
+
+        .brand-logo {
+            width: 5rem;
+            height: 5rem;
+            object-fit: contain;
+            flex: 0 0 auto;
+        }
+
+        .project-legend {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .project-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: #f8fafc;
+            padding: 0.45rem 0.7rem;
+            color: var(--text);
+            font-size: 0.95rem;
+            transition: transform 160ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        .project-chip-progress {
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .project-chip[data-project-toggle] {
+            cursor: pointer;
+        }
+
+        .project-chip:hover {
+            transform: translateY(-1px);
+            border-color: #c8d0da;
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+        }
+
+        .project-chip.is-hidden {
+            opacity: 0.46;
+            background: #f8fafc;
+            box-shadow: none;
+        }
+
+        .project-chip.is-hidden .project-chip-dot {
+            opacity: 0.45;
+        }
+
+        .project-chip-dot {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 999px;
+            flex: 0 0 auto;
+        }
+
+        .project-stats span {
+            background: #f6f7f9;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.45rem 0.75rem;
+        }
+
+        #project-calendar {
+            margin-top: 1rem;
+        }
+
+        .fc {
+            --fc-border-color: var(--border);
+            --fc-button-bg-color: var(--accent-strong);
+            --fc-button-border-color: var(--accent-strong);
+            --fc-button-hover-bg-color: #374151;
+            --fc-button-hover-border-color: #374151;
+            --fc-button-active-bg-color: #1f2937;
+            --fc-button-active-border-color: #1f2937;
+            --fc-event-border-color: transparent;
+            --fc-page-bg-color: transparent;
+            --fc-neutral-bg-color: rgba(243, 244, 246, 0.9);
+            --fc-list-event-hover-bg-color: rgba(229, 231, 235, 0.8);
+            --fc-today-bg-color: rgba(229, 231, 235, 0.6);
+        }
+
+        .fc .fc-toolbar-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .fc .fc-button {
+            border-radius: 999px;
+            text-transform: capitalize;
+            padding: 0.55rem 0.9rem;
+            font-weight: 600;
+        }
+
+        .fc .fc-scrollgrid,
+        .fc .fc-list {
+            border-radius: 18px;
+            overflow: hidden;
+        }
+
+        .fc .fc-toolbar.fc-header-toolbar {
+            margin-bottom: 1.1rem;
+        }
+
+        .fc .fc-daygrid-day.fc-day-today,
+        .fc .fc-timegrid-col.fc-day-today {
+            background: rgba(229, 231, 235, 0.65);
+        }
+
+        .fc .fc-daygrid-day-frame,
+        .fc .fc-multimonth-daygrid-table .fc-daygrid-day-frame {
+            min-height: 96px;
+        }
+
+        .fc .fc-daygrid-day,
+        .fc .fc-daygrid-day-frame,
+        .fc .fc-daygrid-day-events,
+        .fc .fc-daygrid-day-top {
+            cursor: pointer;
+        }
+
+        .fc .fc-col-header-cell-cushion,
+        .fc .fc-daygrid-day-number,
+        .fc .fc-list-day-text,
+        .fc .fc-list-day-side-text {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .fc .fc-daygrid-event-harness {
+            margin-top: 3px;
+        }
+
+        .fc-event.project-range-event {
+            font-weight: 700;
+            opacity: 0.95;
+            border-radius: 10px;
+            padding: 4px 8px;
+            border-width: 0;
+            box-shadow: none;
+            cursor: pointer;
+            transition: transform 150ms ease, box-shadow 180ms ease, filter 180ms ease;
+        }
+
+        .fc-event.worklog-event {
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 4px 8px;
+            border-width: 0;
+            box-shadow: none;
+            cursor: pointer;
+            transition: transform 150ms ease, box-shadow 180ms ease, filter 180ms ease;
+        }
+
+        .fc-event.project-range-event:hover,
+        .fc-event.worklog-event:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.02);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+        }
+
+        .fc .fc-daygrid-event.project-worklog-event {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin-left: 0.8rem;
+            margin-right: 0.35rem;
+            min-height: 1rem;
+        }
+
+        .fc .fc-daygrid-event.external-worklog-event {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin-right: 0.35rem;
+            min-height: 1rem;
+        }
+
+        .fc .fc-daygrid-event.project-worklog-event .worklog-progress-pill,
+        .fc .fc-daygrid-event.external-worklog-event .worklog-progress-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: max(calc(var(--worklog-width, 100) * 1%), 2.8rem);
+            min-height: 0.9rem;
+            padding: 0 0.35rem;
+            border-radius: 999px;
+            background: var(--event-dot-color, #9ca3af);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+            color: var(--worklog-text-color, #ffffff);
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .fc .fc-multimonth .fc-event.project-range-event,
+        .fc .fc-multimonth .fc-event.worklog-event {
+            min-height: 0.72rem;
+            padding: 0;
+            border-radius: 999px;
+        }
+
+        .fc .fc-multimonth .year-event-swatch {
+            display: block;
+            width: 100%;
+            min-height: 0.72rem;
+        }
+
+        .fc .fc-multimonth .year-worklog-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: max(calc(var(--worklog-width, 100) * 1%), 2.4rem);
+            min-height: 0.72rem;
+            padding: 0 0.25rem;
+            border-radius: 999px;
+            background: var(--event-dot-color, #9ca3af);
+            color: var(--worklog-text-color, #ffffff);
+            font-size: 0.62rem;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .fc .fc-list-event-dot {
+            display: none;
+        }
+
+        .fc .fc-list-event-time {
+            display: none;
+        }
+
+        .fc .fc-list-day-cushion {
+            background: #f8fafc;
+        }
+
+        .fc .fc-list-event-title a,
+        .fc .fc-daygrid-event .fc-event-title {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .fc-theme-standard td,
+        .fc-theme-standard th {
+            border-color: var(--border);
+        }
+
+        .calendar-legend {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            color: var(--muted);
+            margin-bottom: 0.6rem;
+        }
+
+        .calendar-legend span::before {
+            content: "";
+            display: inline-block;
+            width: 0.85rem;
+            height: 0.85rem;
+            border-radius: 999px;
+            margin-right: 0.45rem;
+            vertical-align: middle;
+        }
+
+        .legend-project::before { background: #9ca3af; }
+        .legend-log::before { background: #6b7280; }
+        .legend-other::before { background: #d1d5db; }
+
+        .project-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 1.3rem;
+        }
+
+        .project-card {
+            position: relative;
+            overflow: hidden;
+            background: var(--card-strong);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 1rem;
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+            cursor: pointer;
+        }
+
+        .project-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                color-mix(in srgb, var(--project-color, var(--accent-strong)) 20%, white) 0%,
+                color-mix(in srgb, var(--project-color, var(--accent-strong)) 20%, white) calc(var(--project-progress, 0) * 1%),
+                rgba(255, 255, 255, 0) calc(var(--project-progress, 0) * 1%)
+            );
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
+        }
+
+        .project-card-body {
+            position: relative;
+            z-index: 1;
+        }
+
+        .project-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .project-card-header h3 {
+            margin: 0;
+        }
+
+        .project-card h3 {
+            margin-bottom: 0.4rem;
+        }
+
+        .project-progress-badge {
+            position: relative;
+            display: inline-grid;
+            place-items: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            background:
+                radial-gradient(closest-side, white 66%, transparent 67% 100%),
+                conic-gradient(
+                    var(--project-color, var(--accent-strong)) calc(var(--project-progress, 0) * 1%),
+                    rgba(203, 213, 225, 0.55) 0
+                );
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--project-color, var(--accent-strong)) 18%, white);
+            flex: 0 0 auto;
+        }
+
+        .project-progress-badge strong {
+            font-size: 0.92rem;
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }
+
+        .project-progress-badge span {
+            position: absolute;
+            bottom: 0.45rem;
+            font-size: 0.52rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+
+        .project-card a {
+            cursor: pointer;
+        }
+
+        .project-card .project-title-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .project-card .project-title-link::before {
+            content: "";
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 999px;
+            background: var(--project-color, var(--accent-strong));
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--project-color, var(--accent-strong)) 12%, white);
+        }
+
+        .project-card .project-title-link:hover {
+            color: var(--project-color, var(--accent-strong));
+        }
+
+        .project-card .project-description {
+            padding-left: 0.8rem;
+        }
+
+        .project-card .project-people {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            margin: 0.65rem 0 0.15rem;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .project-card .project-people strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .project-card .project-stats span {
+            border-color: color-mix(in srgb, var(--project-color, var(--accent-strong)) 20%, var(--border));
+        }
+
+        .fc .fc-list-event-title {
+            padding: 0;
+        }
+
+        .fc .fc-list-event-title > * {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0 0.2rem 1.25rem;
+        }
+
+        .fc .fc-list-event-title > *::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 0.78rem;
+            height: 0.78rem;
+            border-radius: 999px;
+            background: var(--event-dot-color, #9ca3af);
+            transform: translateY(-50%);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95);
+        }
+
+        .fc .fc-list-event td {
+            padding-top: 0.6rem;
+            padding-bottom: 0.6rem;
+        }
+
+        .fc .fc-list-event.project-worklog-event td {
+            padding-left: 1.35rem;
+        }
+
+        .fc .fc-list-event.project-worklog-event .fc-list-event-title > * {
+            padding-left: 1.45rem;
+        }
+
+        .fc .fc-list-event.project-worklog-event .fc-list-event-title > *::before {
+            left: 0.15rem;
+            width: 0.68rem;
+            height: 0.68rem;
+        }
+
+        .fc .fc-list-event.project-worklog-event .fc-list-event-title {
+            position: relative;
+        }
+
+        .day-worklog-entry {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+        }
+
+        .day-worklog-kicker {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: color-mix(in srgb, var(--event-dot-color, #9ca3af) 78%, #111827);
+        }
+
+        .project-stats {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+
+        .logs-panel {
+            margin-top: 1.2rem;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .logs-table th,
+        .logs-table td {
+            padding: 0.75rem 0.6rem;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .logs-table a {
+            color: var(--accent-strong);
+            text-decoration: none;
+            cursor: pointer;
+            transition: color 150ms ease, text-shadow 150ms ease;
+        }
+
+        .logs-table a:hover {
+            color: #111827;
+            text-shadow: 0 0 0.01px currentColor;
+        }
+
+        .empty {
+            padding: 1rem;
+            border: 1px dashed var(--border);
+            border-radius: 14px;
+            color: var(--muted);
+        }
+
+        .modal-shell {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(33, 26, 20, 0.42);
+            z-index: 50;
+        }
+
+        .modal-shell.is-open {
+            display: flex;
+        }
+
+        .modal {
+            width: min(720px, 100%);
+            max-height: calc(100vh - 2rem);
+            overflow: auto;
+            background: var(--card-strong);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 1.35rem;
+            box-shadow: 0 22px 50px rgba(15, 23, 42, 0.14);
+        }
+
+        .modal-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        form p { margin: 0 0 1rem; }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            margin-top: 0.35rem;
+            padding: 0.78rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: white;
+            font: inherit;
+            color: inherit;
+        }
+
+        input[type="checkbox"] {
+            appearance: auto;
+            -webkit-appearance: checkbox;
+            width: 1.05rem;
+            height: 1.05rem;
+            margin: 0;
+            margin-top: 0;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            accent-color: var(--accent-strong);
+            flex: 0 0 auto;
+        }
+
+        input[type="color"] {
+            appearance: none;
+            -webkit-appearance: none;
+            padding: 0.25rem;
+            height: 3.2rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+            border-radius: 10px;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 10px;
+        }
+
+        input[type="color"]::-moz-color-swatch {
+            border: none;
+            border-radius: 10px;
+        }
+
+        .checkbox-select {
+            margin-top: 0.45rem;
+            padding: 0.75rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: white;
+            display: grid;
+            gap: 0.7rem;
+        }
+
+        .checkbox-select > div {
+            display: block;
+        }
+
+        .checkbox-select label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            width: 100%;
+            padding: 0.35rem 0.45rem;
+            border-radius: 10px;
+            color: var(--text);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-select label:hover {
+            background: #f8fafc;
+            color: var(--accent-strong);
+        }
+
+        .checkbox-inline {
+            margin-top: 0.45rem;
+            padding: 0.85rem 0.95rem;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .errors {
+            color: #a63d40;
+            margin-top: 0.25rem;
+            font-size: 0.95rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+        }
+
+        .day-note {
+            margin-top: 0.35rem;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .fc .fc-daygrid-day-number,
+        .fc .fc-list-event-title,
+        .fc .fc-list-event-title a,
+        .fc .fc-more-link {
+            cursor: pointer;
+        }
+
+        @media (max-width: 900px) {
+            .topbar,
+            .modal-head {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .topbar-brand {
+                justify-content: center;
+            }
+
+            .project-card-header {
+                flex-direction: column;
+            }
+
+            .project-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <section class="panel topbar">
+        <div class="topbar-brand">
+            <img class="brand-logo" src="{% static 'images/mpc-logo-plan.png' %}" alt="MPC Plan">
+            <div>
+            <h1>Planificador de proyectos</h1>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="button" class="button secondary" data-open-project-modal data-project-mode="create">
+                Anadir proyecto
+            </button>
+            <button type="button" class="button" data-open-modal>
+                {% if edit_entry %}Seguir editando registro{% else %}Anadir registro diario{% endif %}
+            </button>
+        </div>
+    </section>
+
+    <section class="panel">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <details class="summary info-panel">
+            <summary>Informacion de planificacion</summary>
+            <div class="info-panel-body">
+                Horas dedicadas a trabajo no asociado a proyectos: {{ other_hours }} h.<br>
+                Capacidad diaria por proyecto: {{ daily_capacity_hours }} h.
+            </div>
+        </details>
+
+        {% if project_legend %}
+            <div class="project-legend">
+                {% for item in project_legend %}
+                    <button
+                        type="button"
+                        class="project-chip{% if not item.project.is_visible %} is-hidden{% endif %}"
+                        data-project-toggle
+                        data-visibility-scope="project"
+                        data-project-id="{{ item.project.pk }}"
+                        data-project-visible="{% if item.project.is_visible %}true{% else %}false{% endif %}"
+                        aria-pressed="{% if item.project.is_visible %}true{% else %}false{% endif %}"
+                        title="{% if item.project.is_visible %}Ocultar proyecto{% else %}Mostrar proyecto{% endif %}"
+                    >
+                        <span class="project-chip-dot" style="background: {{ item.accent_color }};"></span>
+                        {{ item.project.name }}
+                        <span class="project-chip-progress">{{ item.progress_percent|floatformat:0 }}%</span>
+                    </button>
+                {% endfor %}
+                <button
+                    type="button"
+                    class="project-chip{% if not other_work_visible %} is-hidden{% endif %}"
+                    data-project-toggle
+                    data-visibility-scope="other_work"
+                    data-project-visible="{% if other_work_visible %}true{% else %}false{% endif %}"
+                    aria-pressed="{% if other_work_visible %}true{% else %}false{% endif %}"
+                    title="{% if other_work_visible %}Ocultar trabajo fuera de proyecto{% else %}Mostrar trabajo fuera de proyecto{% endif %}"
+                >
+                    <span class="project-chip-dot" style="background: #d1d5db;"></span>
+                    Trabajo fuera de proyectos
+                </button>
+            </div>
+        {% endif %}
+
+
+
+        <div id="project-calendar"></div>
+
+        {% if projects %}
+            <div class="project-grid">
+                {% for item in projects %}
+                    <article
+                        class="project-card"
+                        style="border-color: {{ item.accent_color }}; --project-color: {{ item.accent_color }}; --project-progress: {{ item.progress_percent|floatformat:0 }};"
+                        data-edit-project-url="{% url 'planner:index' %}?edit_project={{ item.project.pk }}&scale={{ scale }}"
+                        tabindex="0"
+                    >
+                        <div class="project-card-body">
+                            <div class="project-card-header">
+                                <h3>
+                                    <a class="project-title-link" href="{% url 'planner:index' %}?edit_project={{ item.project.pk }}&scale={{ scale }}" style="color: inherit; text-decoration: none;">
+                                        {{ item.project.name }}
+                                    </a>
+                                </h3>
+                                <div class="project-progress-badge" aria-label="Avance {{ item.progress_percent|floatformat:0 }} por ciento">
+                                    <strong>{{ item.progress_percent|floatformat:0 }}%</strong>
+                                </div>
+                            </div>
+                            <p class="project-description">{{ item.project.description|default:"Sin descripcion adicional." }}</p>
+                            {% if item.requested_by_names or item.assigned_user_names %}
+                                <div class="project-people">
+                                    {% if item.requested_by_names %}
+                                        <div><strong>Solicitan:</strong> {{ item.requested_by_names|join:", " }}</div>
+                                    {% endif %}
+                                    {% if item.assigned_user_names %}
+                                        <div><strong>Asignado a:</strong> {{ item.assigned_user_names|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                            <div class="project-stats">
+                                <span>Inicio: {{ item.project.planned_start_date|date:"d/m/Y" }}</span>
+                                {% if item.delivery_date %}
+                                    <span>Entrega: {{ item.delivery_date|date:"d/m/Y" }}</span>
+                                {% endif %}
+                                <span>Estimado: {{ item.estimated_hours }} h</span>
+                                <span>Registrado: {{ item.logged_hours }} h</span>
+                                <span>Pendiente: {{ item.remaining_hours }} h</span>
+                                {% if item.blocking_hours > 0 %}
+                                    <span>Horas en otros trabajos: {{ item.blocking_hours }} h</span>
+                                {% endif %}
+                                <span>Fin base: {{ item.baseline_end|date:"d/m/Y" }}</span>
+                                <span>Fin estimado: {{ item.projected_end|date:"d/m/Y" }}</span>
+                                {% if item.delivery_date %}
+                                    {% if item.delivery_delay_days %}
+                                        <span>Retraso entrega: {{ item.delivery_delay_days }} dias</span>
+                                    {% else %}
+                                        <span>Margen entrega: {{ item.delivery_margin_days }} dias</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty" style="margin-top: 1rem;">No hay proyectos todavia. Puedes crearlos desde el admin y asignarles horas estimadas.</div>
+        {% endif %}
+    </section>
+
+    <section class="panel logs-panel">
+        <h2>Registros recientes</h2>
+        {% if recent_logs %}
+            <table class="logs-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Proyecto</th>
+                        <th>Solicita</th>
+                        <th>Realizan</th>
+                        <th>Horas</th>
+                        <th>Descripcion</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                        <tr>
+                            <td>{{ log.date|date:"d/m/Y" }}</td>
+                            <td>{{ log.get_work_type_display }}</td>
+                            <td>{% if log.project %}{{ log.project.name }}{% else %}-{% endif %}</td>
+                            <td>{% for user in log.requested_by.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
+                            <td>{% for user in log.assigned_users.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
+                            <td>{{ log.actual_hours }} h</td>
+                            <td>{{ log.description }}</td>
+                            <td><a href="{% url 'planner:index' %}?edit={{ log.pk }}&scale={{ scale }}">Editar</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty">Aun no hay registros diarios.</div>
+        {% endif %}
+    </section>
+</main>
+
+{{ calendar_events|json_script:"calendar-events-data" }}
+<div class="modal-shell{% if show_project_modal %} is-open{% endif %}" id="project-modal">
+    <div class="modal">
+        <div class="modal-head">
+            <div>
+                <h2>{% if edit_project %}Editar proyecto{% else %}Anadir proyecto{% endif %}</h2>
+                <p class="meta">Crea o actualiza proyectos directamente desde la portada.</p>
+            </div>
+            <button type="button" class="button secondary" data-close-project-modal>Cerrar</button>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="project">
+            <input type="hidden" name="project_id" value="{% if edit_project %}{{ edit_project.pk }}{% endif %}" id="project-id-field">
+            <input type="hidden" name="scale" value="{{ scale }}">
+            {% for field in project_form %}
+                <p>
+                    {% if field.name != "is_visible" %}
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {% endif %}
+                    {% if field.name == "requested_by" or field.name == "assigned_users" %}
+                        <div class="checkbox-select">{{ field }}</div>
+                    {% elif field.name == "is_visible" %}
+                        <div class="checkbox-inline">{{ field }} <span>Visible en calendario</span></div>
+                    {% else %}
+                        {{ field }}
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <div class="errors">{{ error }}</div>
+                    {% endfor %}
+                </p>
+            {% endfor %}
+            {% for error in project_form.non_field_errors %}
+                <div class="errors">{{ error }}</div>
+            {% endfor %}
+            <div class="actions">
+                <button type="submit" class="button">Guardar proyecto</button>
+                <button type="button" class="button secondary" data-close-project-modal>Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-shell{% if show_form_modal %} is-open{% endif %}" id="worklog-modal">
+    <div class="modal">
+        <div class="modal-head">
+            <div>
+                <h2>{% if edit_entry %}Editar registro{% else %}Anadir registro diario{% endif %}</h2>
+                <p class="meta">Pulsa un dia del calendario para rellenar la fecha directamente. Si pulsas un tramo de proyecto, tambien preseleccionara el proyecto.</p>
+            </div>
+            <button type="button" class="button secondary" data-close-modal>Cerrar</button>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            {% if edit_entry %}
+                <input type="hidden" name="entry_id" value="{{ edit_entry.pk }}">
+            {% endif %}
+            <input type="hidden" name="scale" value="{{ scale }}">
+            {% for field in form %}
+                <p>
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {% if field.name == "requested_by" or field.name == "assigned_users" %}
+                        <div class="checkbox-select">{{ field }}</div>
+                    {% else %}
+                        {{ field }}
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <div class="errors">{{ error }}</div>
+                    {% endfor %}
+                </p>
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <div class="errors">{{ error }}</div>
+            {% endfor %}
+            <div class="actions">
+                <button type="submit" class="button">Guardar</button>
+                <button type="button" class="button secondary" data-close-modal>Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const modal = document.getElementById("worklog-modal");
+        const projectModal = document.getElementById("project-modal");
+        const events = JSON.parse(document.getElementById("calendar-events-data").textContent);
+        const calendarEl = document.getElementById("project-calendar");
+        const dateField = document.getElementById("id_date");
+        const projectField = document.getElementById("id_project");
+        const workTypeField = document.getElementById("id_work_type");
+
+        const openButtons = document.querySelectorAll("[data-open-modal]");
+        const closeButtons = document.querySelectorAll("[data-close-modal]");
+        const openProjectButtons = document.querySelectorAll("[data-open-project-modal]");
+        const closeProjectButtons = document.querySelectorAll("[data-close-project-modal]");
+        const projectCards = document.querySelectorAll("[data-edit-project-url]");
+        const projectToggles = document.querySelectorAll("[data-project-toggle]");
+        const openModal = () => modal.classList.add("is-open");
+        const closeModal = () => modal.classList.remove("is-open");
+        const projectIdField = document.getElementById("project-id-field");
+        const projectForm = projectModal.querySelector("form");
+        const worklogForm = modal.querySelector("form");
+        const projectModalTitle = projectModal.querySelector("h2");
+        const projectModalMeta = projectModal.querySelector(".meta");
+        const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]")?.value;
+
+        const blankProjectValues = {
+            name: "",
+            description: "",
+            planned_start_date: "",
+            delivery_date: "",
+            estimated_hours: "",
+            color: "#6b7280",
+            status: "planned",
+            notes: "",
+        };
+
+        const resetProjectFormForCreate = () => {
+            projectForm.reset();
+            if (projectIdField) projectIdField.value = "";
+            Object.entries(blankProjectValues).forEach(([name, value]) => {
+                const field = projectForm.elements.namedItem(name);
+                if (field) field.value = value;
+            });
+            if (projectModalTitle) projectModalTitle.textContent = "Anadir proyecto";
+            if (projectModalMeta) projectModalMeta.textContent = "Crea un proyecto nuevo directamente desde la portada.";
+        };
+
+        const openProjectModal = (mode = "edit") => {
+            if (mode === "create") {
+                resetProjectFormForCreate();
+            }
+            projectModal.classList.add("is-open");
+        };
+        const closeProjectModal = () => projectModal.classList.remove("is-open");
+
+        const guardSingleSubmit = (form, busyLabel) => {
+            if (!form) {
+                return;
+            }
+            form.addEventListener("submit", (event) => {
+                if (form.dataset.submitting === "true") {
+                    event.preventDefault();
+                    return;
+                }
+                form.dataset.submitting = "true";
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.dataset.originalText = submitButton.textContent;
+                    submitButton.textContent = busyLabel;
+                }
+            });
+        };
+
+        const prepareForm = ({ dateStr = "", projectId = "", workType = "" } = {}) => {
+            if (dateField && dateStr) dateField.value = dateStr;
+            if (projectField && projectId !== "") projectField.value = String(projectId);
+            if (workTypeField && workType) workTypeField.value = workType;
+        };
+
+        guardSingleSubmit(projectForm, "Guardando...");
+        guardSingleSubmit(worklogForm, "Guardando...");
+
+        openButtons.forEach((button) => button.addEventListener("click", openModal));
+        closeButtons.forEach((button) => button.addEventListener("click", closeModal));
+        openProjectButtons.forEach((button) => button.addEventListener("click", () => {
+            const mode = button.dataset.projectMode || "edit";
+            openProjectModal(mode);
+        }));
+        closeProjectButtons.forEach((button) => button.addEventListener("click", closeProjectModal));
+        projectCards.forEach((card) => {
+            const openProjectEditor = () => {
+                window.location.href = card.dataset.editProjectUrl;
+            };
+
+            card.addEventListener("click", (event) => {
+                if (event.target.closest("a, button, input, select, textarea, label")) {
+                    return;
+                }
+                openProjectEditor();
+            });
+
+            card.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openProjectEditor();
+                }
+            });
+        });
+        projectToggles.forEach((toggle) => {
+            toggle.addEventListener("click", async () => {
+                const currentlyVisible = toggle.dataset.projectVisible === "true";
+                const nextVisible = !currentlyVisible;
+                const formData = new URLSearchParams({
+                    form_type: "toggle_project_visibility",
+                    visibility_scope: toggle.dataset.visibilityScope || "project",
+                    is_visible: String(nextVisible),
+                    scale: "{{ scale }}",
+                });
+
+                if (toggle.dataset.projectId) {
+                    formData.set("project_id", toggle.dataset.projectId);
+                }
+
+                const response = await fetch("{% url 'planner:index' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                        "X-CSRFToken": csrfToken,
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: formData.toString(),
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                toggle.dataset.projectVisible = nextVisible ? "true" : "false";
+                toggle.setAttribute("aria-pressed", nextVisible ? "true" : "false");
+                toggle.classList.toggle("is-hidden", !nextVisible);
+                toggle.title = toggle.dataset.visibilityScope === "other_work"
+                    ? (nextVisible ? "Ocultar trabajo fuera de proyecto" : "Mostrar trabajo fuera de proyecto")
+                    : (nextVisible ? "Ocultar proyecto" : "Mostrar proyecto");
+
+                const currentViewToScale = {
+                    listDay: "day",
+                    dayGridMonth: "month",
+                    multiMonthYear: "year",
+                };
+                const nextUrl = new URL(window.location.href);
+                nextUrl.searchParams.set("scale", currentViewToScale[calendar.view.type] || "{{ scale }}");
+                nextUrl.searchParams.set("date", calendar.getDate().toISOString().slice(0, 10));
+                window.location.href = nextUrl.toString();
+            });
+        });
+        document.querySelectorAll(".checkbox-select label").forEach((label) => {
+            label.addEventListener("click", (event) => {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                if (!checkbox || event.target === checkbox) {
+                    return;
+                }
+                event.preventDefault();
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+        });
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) closeModal();
+        });
+        projectModal.addEventListener("click", (event) => {
+            if (event.target === projectModal) closeProjectModal();
+        });
+
+        const initialViewMap = {
+            day: "listDay",
+            month: "dayGridMonth",
+            year: "multiMonthYear",
+        };
+
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            locale: "es",
+                    initialView: initialViewMap["{{ scale }}"] || "dayGridMonth",
+            headerToolbar: {
+                left: "prev,next today",
+                center: "title",
+                right: "listDay,dayGridMonth,multiMonthYear",
+            },
+            buttonText: {
+                today: "Hoy",
+                listDay: "Dia",
+                dayGridMonth: "Mes",
+                multiMonthYear: "Año",
+            },
+            height: "auto",
+            dayMaxEvents: true,
+            navLinks: true,
+            events,
+            eventOrder: "displayOrder,start,-duration,title",
+            dayMaxEvents: false,
+            moreLinkClick: "day",
+            views: {
+                listDay: {
+                    noEventsContent: "No hay trabajo registrado ni planificado para este dia.",
+                },
+                dayGridMonth: {
+                    dayMaxEventRows: false,
+                    eventDisplay: "block",
+                },
+                multiMonthYear: {
+                    multiMonthMaxColumns: 3,
+                    dayMaxEventRows: false,
+                    eventDisplay: "block",
+                },
+            },
+            dateClick(info) {
+                prepareForm({
+                    dateStr: info.dateStr,
+                    projectId: "",
+                    workType: "other_work",
+                });
+                openModal();
+            },
+            eventClick(info) {
+                const props = info.event.extendedProps || {};
+                if (props.eventType === "worklog" && props.editId) {
+                    window.location.href = `?edit=${props.editId}&scale={{ scale }}`;
+                    return;
+                }
+                if (props.eventType === "project-range") {
+                    window.location.href = `?edit_project=${props.projectId}&scale={{ scale }}`;
+                }
+            },
+            eventDidMount(info) {
+                const props = info.event.extendedProps || {};
+                const eventColor = props.projectColor || info.event.borderColor || info.event.backgroundColor || "#9ca3af";
+                info.el.style.setProperty("--event-dot-color", eventColor);
+                info.el.style.setProperty("--worklog-width", props.widthPercent || 100);
+                info.el.style.setProperty("--worklog-text-color", props.textColor || info.event.textColor || "#ffffff");
+                if (props.eventType === "project-range") {
+                    info.el.title = `${info.event.title}\nPrevisto: ${props.hours} h\nPendiente: ${props.remainingHours} h`;
+                } else if (props.eventType === "worklog") {
+                    info.el.title = `${info.event.title}\n${props.description || ""}`;
+                }
+            },
+            eventContent(info) {
+                const props = info.event.extendedProps || {};
+                const title = info.event.title;
+
+                if (info.view.type === "listDay") {
+                    if (props.eventType === "worklog" && props.projectId) {
+                        return {
+                            html: `<div class="day-worklog-entry"><span class="day-worklog-kicker">Trabajo real</span><span>${props.description || props.projectName} · ${props.hours} h</span></div>`,
+                        };
+                    }
+                    return { html: `<div>${title}</div>` };
+                }
+
+                if (!["dayGridMonth", "multiMonthYear"].includes(info.view.type)) {
+                    return { html: `<div>${title}</div>` };
+                }
+
+                if (info.view.type === "multiMonthYear") {
+                    if (props.eventType === "worklog") {
+                        return { html: `<span class="year-worklog-pill">${props.hoursLabel || props.hours}</span>` };
+                    }
+                    return { html: '<span class="year-event-swatch" aria-hidden="true"></span>' };
+                }
+
+                if (props.eventType === "project-range") {
+                    return { html: `<span>${info.event.title}</span>` };
+                }
+
+                if (props.eventType === "worklog") {
+                    return { html: `<span class="worklog-progress-pill">${props.hoursLabel || props.hours}</span>` };
+                }
+
+                return { html: `<span>${title}</span>` };
+            },
+        });
+
+        calendar.render();
+
+        {% if selected_date %}
+            prepareForm({ dateStr: "{{ selected_date }}" });
+        {% endif %}
+    })();
+</script>
+</body>
+</html>
