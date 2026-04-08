@@ -1,3 +1,4 @@
 # Dependencias de ejecucion del proyecto para despliegue y desarrollo.
 Django==5.2.12
 gunicorn==23.0.0
+whitenoise==6.9.0
