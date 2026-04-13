@@ -659,6 +659,21 @@
             border-collapse: collapse;
         }
 
+        .logs-table-shell.is-scrollable {
+            max-height: 15.5rem;
+            overflow-y: auto;
+            padding-right: 0.2rem;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+
+        .logs-table-shell.is-scrollable .logs-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f8fafc;
+        }
+
         .logs-table th,
         .logs-table td {
             padding: 0.75rem 0.6rem;
@@ -862,6 +877,97 @@
             .project-grid {
                 grid-template-columns: 1fr;
             }
+
+            .logs-table {
+                display: block;
+            }
+
+            .logs-table thead {
+                display: none;
+            }
+
+            .logs-table tbody,
+            .logs-table tr,
+            .logs-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .logs-table tr {
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                padding: 0.5rem 0.75rem;
+                margin-bottom: 0.8rem;
+                background: #fff;
+            }
+
+            .logs-table td {
+                border-bottom: 1px dashed var(--border);
+                padding: 0.55rem 0;
+                text-align: left;
+                overflow-wrap: anywhere;
+            }
+
+            .logs-table td:last-child {
+                border-bottom: none;
+            }
+
+            .logs-table td::before {
+                display: block;
+                font-size: 0.78rem;
+                font-weight: 700;
+                color: var(--muted);
+                margin-bottom: 0.18rem;
+                text-transform: uppercase;
+                letter-spacing: 0.02em;
+            }
+
+            .logs-table td:nth-child(1)::before { content: "Fecha"; }
+            .logs-table td:nth-child(2)::before { content: "Tipo"; }
+            .logs-table td:nth-child(3)::before { content: "Proyecto"; }
+            .logs-table td:nth-child(4)::before { content: "Solicita"; }
+            .logs-table td:nth-child(5)::before { content: "Realizan"; }
+            .logs-table td:nth-child(6)::before { content: "Horas"; }
+            .logs-table td:nth-child(7)::before { content: "Descripcion"; }
+            .logs-table td:nth-child(8)::before { content: "Accion"; }
+
+            .logs-table-shell.is-scrollable {
+                max-height: 26rem;
+            }
+
+            .fc .fc-header-toolbar {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.6rem;
+            }
+
+            .fc .fc-toolbar-chunk {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 0.5rem;
+                min-width: 0;
+            }
+
+            .fc .fc-toolbar-title {
+                text-align: center;
+                font-size: 1.35rem;
+                line-height: 1.15;
+                margin: 0;
+                word-break: break-word;
+            }
+
+            .fc .fc-button-group {
+                display: inline-flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                max-width: 100%;
+            }
+
+            .fc .fc-button {
+                white-space: normal;
+            }
         }
     </style>
 </head>
@@ -1002,34 +1108,36 @@
     <section class="panel logs-panel">
         <h2>Registros recientes</h2>
         {% if recent_logs %}
-            <table class="logs-table">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Proyecto</th>
-                        <th>Solicita</th>
-                        <th>Realizan</th>
-                        <th>Horas</th>
-                        <th>Descripcion</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in recent_logs %}
+            <div class="logs-table-shell{% if recent_logs|length > 5 %} is-scrollable{% endif %}">
+                <table class="logs-table">
+                    <thead>
                         <tr>
-                            <td>{{ log.date|date:"d/m/Y" }}</td>
-                            <td>{{ log.get_work_type_display }}</td>
-                            <td>{% if log.project %}{{ log.project.name }}{% else %}-{% endif %}</td>
-                            <td>{% for user in log.requested_by.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
-                            <td>{% for user in log.assigned_users.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
-                            <td>{{ log.actual_hours }} h</td>
-                            <td>{{ log.description }}</td>
-                            <td><a href="{% url 'planner:index' %}?edit={{ log.pk }}&scale={{ scale }}">Editar</a></td>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Proyecto</th>
+                            <th>Solicita</th>
+                            <th>Realizan</th>
+                            <th>Horas</th>
+                            <th>Descripcion</th>
+                            <th></th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_logs %}
+                            <tr>
+                                <td>{{ log.date|date:"d/m/Y" }}</td>
+                                <td>{{ log.get_work_type_display }}</td>
+                                <td>{% if log.project %}{{ log.project.name }}{% else %}-{% endif %}</td>
+                                <td>{% for user in log.requested_by.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
+                                <td>{% for user in log.assigned_users.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
+                                <td>{{ log.actual_hours }} h</td>
+                                <td>{{ log.description }}</td>
+                                <td><a href="{% url 'planner:index' %}?edit={{ log.pk }}&scale={{ scale }}">Editar</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% else %}
             <div class="empty">Aun no hay registros diarios.</div>
         {% endif %}
