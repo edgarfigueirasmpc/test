@@ -11,6 +11,7 @@ from .services import build_timeline_context
 
 @require_http_methods(["GET", "POST"])
 def index(request):
+    show_weekends = request.GET.get("show_weekends", "").strip().lower() in {"1", "true", "yes", "on"}
     scale = request.GET.get("scale", "month")
     if scale not in {"day", "month", "year"}:
         scale = "month"
@@ -91,6 +92,7 @@ def index(request):
             "edit_entry": edit_entry,
             "edit_project": edit_project,
             "scale": scale,
+            "show_weekends": show_weekends,
             "selected_date": selected_date,
             "show_form_modal": bool(edit_entry or worklog_form.errors),
             "show_project_modal": bool(edit_project or project_form.errors),

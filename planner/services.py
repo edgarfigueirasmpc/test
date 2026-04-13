@@ -12,6 +12,39 @@ def _quantize(value):
     return value.quantize(Decimal("0.01"))
 
 
+def _is_workday(value):
+    return value.weekday() < 5
+
+
+def _next_workday(value):
+    current = value
+    while not _is_workday(current):
+        current += timedelta(days=1)
+    return current
+
+
+def _end_date_from_workdays(start_date, workdays):
+    if workdays <= 0:
+        return _next_workday(start_date)
+    current = _next_workday(start_date)
+    remaining = workdays - 1
+    while remaining > 0:
+        current += timedelta(days=1)
+        if _is_workday(current):
+            remaining -= 1
+    return current
+
+
+def _extend_end_by_workdays(end_date, extra_workdays):
+    current = _next_workday(end_date)
+    remaining = extra_workdays
+    while remaining > 0:
+        current += timedelta(days=1)
+        if _is_workday(current):
+            remaining -= 1
+    return current
+
+
 def _hex_to_rgb(color):
     color = color.lstrip("#")
     return tuple(int(color[index:index + 2], 16) for index in (0, 2, 4))
@@ -49,7 +82,7 @@ def _width_percent_from_hours(hours):
 
 
 def _end_date_from_hours(start_date, hours):
-    return start_date + timedelta(days=_days_from_hours(hours) - 1)
+    return _end_date_from_workdays(start_date, _days_from_hours(hours))
 
 
 def _floor_to_scale(value, scale):
@@ -169,7 +202,7 @@ def build_timeline_context(scale="month"):
 
         interruption_delay_days = _days_from_hours(blocking_hours) if blocking_hours > ZERO else 0
         if interruption_delay_days:
-            projected_end += timedelta(days=interruption_delay_days)
+            projected_end = _extend_end_by_workdays(projected_end, interruption_delay_days)
 
         delivery_date = project.delivery_date
         delivery_delay_days = None
@@ -250,15 +283,16 @@ def build_timeline_context(scale="month"):
 
         current_day = project.planned_start_date
         while current_day <= projected_end:
-            marker_list = daily_markers[current_day.isoformat()]["planned"]
-            if not any(marker["projectId"] == project.id for marker in marker_list):
-                marker_list.append(
-                    {
-                        "projectId": project.id,
-                        "color": project.color,
-                        "name": project.name,
-                    }
-                )
+            if _is_workday(current_day):
+                marker_list = daily_markers[current_day.isoformat()]["planned"]
+                if not any(marker["projectId"] == project.id for marker in marker_list):
+                    marker_list.append(
+                        {
+                            "projectId": project.id,
+                            "color": project.color,
+                            "name": project.name,
+                        }
+                    )
             current_day += timedelta(days=1)
 
     if not timeline_start:
