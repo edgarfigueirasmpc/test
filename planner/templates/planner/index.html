@@ -1297,14 +1297,35 @@
             month: "dayGridMonth",
             year: "multiMonthYear",
         };
+        const initialShowWeekends = {% if show_weekends %}true{% else %}false{% endif %};
 
         const calendar = new FullCalendar.Calendar(calendarEl, {
             locale: "es",
-                    initialView: initialViewMap["{{ scale }}"] || "dayGridMonth",
+            initialView: initialViewMap["{{ scale }}"] || "dayGridMonth",
+            firstDay: 1,
+            weekends: initialShowWeekends,
             headerToolbar: {
                 left: "prev,next today",
                 center: "title",
-                right: "listDay,dayGridMonth,multiMonthYear",
+                right: "toggleWeekends,listDay,dayGridMonth,multiMonthYear",
+            },
+            customButtons: {
+                toggleWeekends: {
+                    text: initialShowWeekends ? "Ocultar findes" : "Mostrar findes",
+                    click() {
+                        const currentViewToScale = {
+                            listDay: "day",
+                            dayGridMonth: "month",
+                            multiMonthYear: "year",
+                        };
+                        const nextUrl = new URL(window.location.href);
+                        const nextShowWeekends = !calendar.getOption("weekends");
+                        nextUrl.searchParams.set("scale", currentViewToScale[calendar.view.type] || "{{ scale }}");
+                        nextUrl.searchParams.set("date", calendar.getDate().toISOString().slice(0, 10));
+                        nextUrl.searchParams.set("show_weekends", nextShowWeekends ? "1" : "0");
+                        window.location.href = nextUrl.toString();
+                    },
+                },
             },
             buttonText: {
                 today: "Hoy",
