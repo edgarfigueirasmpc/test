@@ -1,2 +1,1 @@
 Pasar todos los CDN a estáticos para no depender de ellos en producción
-Cambiar el inicio del calenddario para que empeicen las semanas en lunes y no en domingo

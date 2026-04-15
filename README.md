@@ -44,8 +44,21 @@ Dependencias actuales de Python:
 - Django
 - asgiref
 - sqlparse
+- cloudinary
 
 Referencia del entorno en [`requirements.txt`](./requirements.txt).
+
+## Variables de entorno
+
+El proyecto carga variables desde `.env` usando `python-dotenv`.
+
+Para habilitar adjuntos en Cloudinary, define:
+
+```env
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+```
+
+Ese valor se lee en [`config/settings.py`](./config/settings.py) y no debe dejarse hardcodeado en el repositorio. En el panel y en la portada, si no existe `CLOUDINARY_URL`, los formularios seguiran funcionando, pero no aceptaran nuevos adjuntos.
 
 ## Estructura del proyecto
 

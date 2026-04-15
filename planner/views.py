@@ -1,8 +1,10 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
+from django.db import transaction
 
 from .forms import ProjectForm, WorkLogForm
 from .models import PlannerSettings, Project, WorkLog
@@ -50,32 +52,44 @@ def index(request):
             if project_id:
                 project_instance = get_object_or_404(Project, pk=project_id)
 
-            project_form = ProjectForm(request.POST, instance=project_instance)
+            project_form = ProjectForm(request.POST, request.FILES, instance=project_instance)
             worklog_initial = {}
             if selected_date:
                 worklog_initial["date"] = selected_date
             worklog_form = WorkLogForm(initial=worklog_initial)
 
             if project_form.is_valid():
-                project_form.save()
-                messages.success(request, "Proyecto guardado correctamente.")
-                if scale == "month":
-                    return redirect("planner:index")
-                return redirect(f"{reverse('planner:index')}?scale={scale}")
+                try:
+                    with transaction.atomic():
+                        project = project_form.save()
+                        project_form.save_attachments(project)
+                except ValidationError as exc:
+                    project_form.add_error("attachments", exc)
+                else:
+                    messages.success(request, "Proyecto guardado correctamente.")
+                    if scale == "month":
+                        return redirect("planner:index")
+                    return redirect(f"{reverse('planner:index')}?scale={scale}")
             edit_project = project_instance
         else:
             entry_id = request.POST.get("entry_id")
             instance = None
             if entry_id:
                 instance = get_object_or_404(WorkLog, pk=entry_id)
-            worklog_form = WorkLogForm(request.POST, instance=instance)
+            worklog_form = WorkLogForm(request.POST, request.FILES, instance=instance)
             project_form = ProjectForm(instance=edit_project)
             if worklog_form.is_valid():
-                worklog_form.save()
-                messages.success(request, "Registro guardado correctamente.")
-                if scale == "month":
-                    return redirect("planner:index")
-                return redirect(f"{reverse('planner:index')}?scale={scale}")
+                try:
+                    with transaction.atomic():
+                        work_log = worklog_form.save()
+                        worklog_form.save_attachments(work_log)
+                except ValidationError as exc:
+                    worklog_form.add_error("attachments", exc)
+                else:
+                    messages.success(request, "Registro guardado correctamente.")
+                    if scale == "month":
+                        return redirect("planner:index")
+                    return redirect(f"{reverse('planner:index')}?scale={scale}")
             edit_entry = instance
     else:
         initial = {}
@@ -96,7 +110,7 @@ def index(request):
             "selected_date": selected_date,
             "show_form_modal": bool(edit_entry or worklog_form.errors),
             "show_project_modal": bool(edit_project or project_form.errors),
-            "recent_logs": WorkLog.objects.select_related("project").prefetch_related("requested_by", "assigned_users")[:15],
+            "recent_logs": WorkLog.objects.select_related("project").prefetch_related("requested_by", "assigned_users", "attachments")[:15],
         }
     )
     return render(request, "planner/index.html", context)
