@@ -56,7 +56,8 @@
         .meta,
         label,
         .logs-table td,
-        .project-card p {
+        .project-card p,
+        .attachment-list {
             color: var(--muted);
         }
 
@@ -233,6 +234,16 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 0.45rem 0.75rem;
+        }
+
+        .attachment-list {
+            margin: 0.65rem 0 0;
+            padding-left: 1rem;
+            font-size: 0.92rem;
+        }
+
+        .attachment-list a {
+            color: var(--accent-strong);
         }
 
         #project-calendar {
@@ -1096,6 +1107,13 @@
                                     {% endif %}
                                 {% endif %}
                             </div>
+                            {% if item.project.attachments.all %}
+                                <ul class="attachment-list">
+                                    {% for attachment in item.project.attachments.all %}
+                                        <li><a href="{{ attachment.file_url }}" target="_blank" rel="noopener noreferrer">{{ attachment.original_filename }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
                         </div>
                     </article>
                 {% endfor %}
@@ -1119,6 +1137,7 @@
                             <th>Realizan</th>
                             <th>Horas</th>
                             <th>Descripcion</th>
+                            <th>Adjuntos</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -1132,6 +1151,17 @@
                                 <td>{% for user in log.assigned_users.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
                                 <td>{{ log.actual_hours }} h</td>
                                 <td>{{ log.description }}</td>
+                                <td>
+                                    {% if log.attachments.all %}
+                                        <ul class="attachment-list">
+                                            {% for attachment in log.attachments.all %}
+                                                <li><a href="{{ attachment.file_url }}" target="_blank" rel="noopener noreferrer">{{ attachment.original_filename }}</a></li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
                                 <td><a href="{% url 'planner:index' %}?edit={{ log.pk }}&scale={{ scale }}">Editar</a></td>
                             </tr>
                         {% endfor %}
@@ -1154,7 +1184,7 @@
             </div>
             <button type="button" class="button secondary" data-close-project-modal>Cerrar</button>
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="form_type" value="project">
             <input type="hidden" name="project_id" value="{% if edit_project %}{{ edit_project.pk }}{% endif %}" id="project-id-field">
@@ -1183,6 +1213,16 @@
                 <button type="submit" class="button">Guardar proyecto</button>
                 <button type="button" class="button secondary" data-close-project-modal>Cancelar</button>
             </div>
+            {% if edit_project and edit_project.attachments.exists %}
+                <div class="info-panel-body">
+                    <strong>Adjuntos actuales:</strong>
+                    <ul class="attachment-list">
+                        {% for attachment in edit_project.attachments.all %}
+                            <li><a href="{{ attachment.file_url }}" target="_blank" rel="noopener noreferrer">{{ attachment.original_filename }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
         </form>
     </div>
 </div>
@@ -1196,7 +1236,7 @@
             </div>
             <button type="button" class="button secondary" data-close-modal>Cerrar</button>
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             {% if edit_entry %}
                 <input type="hidden" name="entry_id" value="{{ edit_entry.pk }}">
@@ -1222,6 +1262,16 @@
                 <button type="submit" class="button">Guardar</button>
                 <button type="button" class="button secondary" data-close-modal>Cancelar</button>
             </div>
+            {% if edit_entry and edit_entry.attachments.exists %}
+                <div class="info-panel-body">
+                    <strong>Adjuntos actuales:</strong>
+                    <ul class="attachment-list">
+                        {% for attachment in edit_entry.attachments.all %}
+                            <li><a href="{{ attachment.file_url }}" target="_blank" rel="noopener noreferrer">{{ attachment.original_filename }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
         </form>
     </div>
 </div>

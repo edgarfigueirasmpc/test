@@ -1,12 +1,30 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from .models import Project, WorkLog
+from .models import Project, ProjectAttachment, WorkLog, WorkLogAttachment
 
 User = get_user_model()
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if not data:
+            return []
+        if isinstance(data, (list, tuple)):
+            return [single_file_clean(item, initial) for item in data]
+        return [single_file_clean(data, initial)]
+
+
 class ProjectForm(forms.ModelForm):
+    attachments = MultipleFileField(required=False, label="adjuntos")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         ordered_users = User.objects.order_by("username")
@@ -32,6 +50,10 @@ class ProjectForm(forms.ModelForm):
 
         return cleaned_data
 
+    def save_attachments(self, project):
+        for uploaded_file in self.cleaned_data.get("attachments", []):
+            ProjectAttachment.create_from_upload(project, uploaded_file)
+
     class Meta:
         model = Project
         fields = [
@@ -46,6 +68,7 @@ class ProjectForm(forms.ModelForm):
             "color",
             "status",
             "notes",
+            "attachments",
         ]
         widgets = {
             "planned_start_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
@@ -59,11 +82,17 @@ class ProjectForm(forms.ModelForm):
 
 
 class WorkLogForm(forms.ModelForm):
+    attachments = MultipleFileField(required=False, label="adjuntos")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         ordered_users = User.objects.order_by("username")
         self.fields["requested_by"].queryset = ordered_users
         self.fields["assigned_users"].queryset = ordered_users
+
+    def save_attachments(self, work_log):
+        for uploaded_file in self.cleaned_data.get("attachments", []):
+            WorkLogAttachment.create_from_upload(work_log, uploaded_file)
 
     class Meta:
         model = WorkLog
@@ -76,6 +105,7 @@ class WorkLogForm(forms.ModelForm):
             "description",
             "actual_hours",
             "notes",
+            "attachments",
         ]
         widgets = {
             "date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),

@@ -1,11 +1,14 @@
+from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import PlannerSettings, Project, WorkLog
+from .models import PlannerSettings, Project, ProjectAttachment, WorkLog, WorkLogAttachment
 from .services import build_timeline_context
 
 User = get_user_model()
@@ -109,7 +112,8 @@ class TimelineServiceTests(TestCase):
         self.assertEqual(summary["projected_end"].isoformat(), "2026-04-01")
         self.assertEqual(summary["blocking_hours"], Decimal("7.00"))
 
-    def test_projects_can_overlap_in_month_view(self):
+    @patch("planner.services.timezone.localdate", return_value=date(2026, 3, 20))
+    def test_projects_can_overlap_in_month_view(self, _mock_localdate):
         Project.objects.create(
             name="Proyecto A",
             planned_start_date="2026-03-01",
@@ -243,7 +247,93 @@ class TimelineServiceTests(TestCase):
         self.assertEqual(ordered[2]["extendedProps"]["projectId"], project_b.id)
 
 
+@override_settings(
+    STORAGES={
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+)
 class IndexViewTests(TestCase):
+    @patch("planner.cloudinary_utils.cloudinary.uploader.upload")
+    def test_can_create_work_log_with_attachments_from_index(self, mock_upload):
+        mock_upload.return_value = {
+            "public_id": "planner/worklogs/1/parte",
+            "resource_type": "raw",
+            "format": "pdf",
+            "bytes": 12,
+            "secure_url": "https://res.cloudinary.com/demo/raw/upload/v1/parte.pdf",
+        }
+        project = Project.objects.create(
+            name="Proyecto Web",
+            planned_start_date="2026-03-30",
+            estimated_hours=Decimal("12.00"),
+        )
+
+        response = self.client.post(
+            reverse("planner:index"),
+            data={
+                "scale": "month",
+                "date": "2026-03-30",
+                "project": project.pk,
+                "description": "Primer bloque",
+                "actual_hours": "2.50",
+                "work_type": WorkLog.WorkType.PROJECT,
+                "attachments": [
+                    SimpleUploadedFile("parte.pdf", b"contenido pdf", content_type="application/pdf"),
+                ],
+            },
+        )
+
+        self.assertRedirects(response, reverse("planner:index"))
+        attachment = WorkLogAttachment.objects.get()
+        self.assertEqual(attachment.original_filename, "parte.pdf")
+        self.assertEqual(attachment.file_format, "pdf")
+        self.assertEqual(attachment.work_log.description, "Primer bloque")
+        mock_upload.assert_called_once()
+
+    @patch("planner.cloudinary_utils.cloudinary.uploader.upload")
+    def test_can_create_project_with_attachments_from_index(self, mock_upload):
+        mock_upload.return_value = {
+            "public_id": "planner/projects/1/plano",
+            "resource_type": "raw",
+            "format": "docx",
+            "bytes": 18,
+            "secure_url": "https://res.cloudinary.com/demo/raw/upload/v1/plano.docx",
+        }
+
+        response = self.client.post(
+            reverse("planner:index"),
+            data={
+                "form_type": "project",
+                "scale": "month",
+                "name": "Proyecto Nuevo",
+                "description": "Alta desde portada",
+                "planned_start_date": "2026-03-30",
+                "delivery_date": "2026-04-15",
+                "is_visible": "on",
+                "estimated_hours": "14.00",
+                "color": "#445566",
+                "status": Project.Status.PLANNED,
+                "attachments": [
+                    SimpleUploadedFile(
+                        "plano.docx",
+                        b"contenido docx",
+                        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ),
+                ],
+            },
+        )
+
+        self.assertRedirects(response, reverse("planner:index"))
+        attachment = ProjectAttachment.objects.get()
+        self.assertEqual(attachment.original_filename, "plano.docx")
+        self.assertEqual(attachment.project.name, "Proyecto Nuevo")
+        mock_upload.assert_called_once()
+
     def test_can_create_and_update_work_logs_from_index(self):
         requester = User.objects.create_user(username="solicita", password="x")
         requester_two = User.objects.create_user(username="jefe", password="x")

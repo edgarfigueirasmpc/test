@@ -5,6 +5,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from .cloudinary_utils import destroy_attachment, extract_filename, upload_attachment
+
 User = get_user_model()
 
 
@@ -198,3 +200,94 @@ class PlannerSettings(models.Model):
     def get_solo(cls):
         settings, _ = cls.objects.get_or_create(pk=1)
         return settings
+
+
+class BaseAttachment(models.Model):
+    original_filename = models.CharField("nombre original", max_length=255)
+    file_url = models.URLField("url del archivo", max_length=600)
+    cloudinary_public_id = models.CharField("id publico de Cloudinary", max_length=255)
+    cloudinary_resource_type = models.CharField(
+        "tipo de recurso",
+        max_length=50,
+        default="raw",
+    )
+    file_format = models.CharField("formato", max_length=50, blank=True)
+    file_size = models.PositiveBigIntegerField("tamano en bytes", default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return self.original_filename
+
+    @classmethod
+    def _build_from_upload(cls, uploaded_file, *, folder, **extra_fields):
+        result = upload_attachment(
+            uploaded_file,
+            folder=folder,
+            tags=["planner", cls.__name__.lower()],
+        )
+        return cls.objects.create(
+            original_filename=uploaded_file.name,
+            file_url=result.get("secure_url") or result.get("url", ""),
+            cloudinary_public_id=result["public_id"],
+            cloudinary_resource_type=result.get("resource_type", "raw"),
+            file_format=result.get("format", ""),
+            file_size=result.get("bytes") or getattr(uploaded_file, "size", 0) or 0,
+            **extra_fields,
+        )
+
+    @property
+    def filename(self):
+        return extract_filename(self.file_url, self.original_filename)
+
+    def delete(self, *args, **kwargs):
+        destroy_attachment(
+            self.cloudinary_public_id,
+            resource_type=self.cloudinary_resource_type,
+        )
+        super().delete(*args, **kwargs)
+
+
+class ProjectAttachment(BaseAttachment):
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        verbose_name="proyecto",
+    )
+
+    class Meta(BaseAttachment.Meta):
+        verbose_name = "adjunto de proyecto"
+        verbose_name_plural = "adjuntos de proyecto"
+
+    @classmethod
+    def create_from_upload(cls, project, uploaded_file):
+        return cls._build_from_upload(
+            uploaded_file,
+            folder=f"planner/projects/{project.pk}",
+            project=project,
+        )
+
+
+class WorkLogAttachment(BaseAttachment):
+    work_log = models.ForeignKey(
+        WorkLog,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        verbose_name="registro diario",
+    )
+
+    class Meta(BaseAttachment.Meta):
+        verbose_name = "adjunto de registro diario"
+        verbose_name_plural = "adjuntos de registros diarios"
+
+    @classmethod
+    def create_from_upload(cls, work_log, uploaded_file):
+        return cls._build_from_upload(
+            uploaded_file,
+            folder=f"planner/worklogs/{work_log.pk}",
+            work_log=work_log,
+        )
