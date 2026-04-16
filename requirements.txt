@@ -1,0 +1,7 @@
+# Dependencias de ejecucion del proyecto para despliegue y desarrollo.
+Django==5.2.12
+gunicorn==23.0.0
+whitenoise==6.9.0
+python-dotenv==1.2.2
+psycopg2-binary==2.9.11
+cloudinary==1.44.1
