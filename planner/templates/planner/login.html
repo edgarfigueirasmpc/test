@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Acceso al planificador</title>
+    <style>
+        :root {
+            --bg: #f3f4f6;
+            --panel: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #d9dde3;
+            --accent: #4b5563;
+            --error: #9f1239;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 1rem;
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+            background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -20px;
+            background-image: url("{% static 'images/mosaico.png' %}");
+            background-repeat: repeat;
+            background-size: 100px;
+            opacity: 0.24;
+            filter: blur(1px);
+            z-index: 0;
+        }
+
+        .login-panel {
+            width: min(100%, 390px);
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--panel);
+            box-shadow: 0 22px 50px rgba(15, 23, 42, 0.08);
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-logo {
+            width: 10rem;
+            height: 10rem;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 0.8rem;
+        }
+
+        h1 {
+            margin: 0 0 0.35rem;
+            font-size: 1.5rem;
+            letter-spacing: 0;
+        }
+
+        p {
+            margin: 0 0 1.2rem;
+            color: var(--muted);
+        }
+
+        label {
+            display: block;
+            margin: 0 0 0.35rem;
+            font-weight: 650;
+        }
+
+        input {
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 0.82rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font: inherit;
+        }
+
+        input:focus {
+            outline: 2px solid rgba(75, 85, 99, 0.22);
+            border-color: var(--accent);
+        }
+
+        button {
+            width: 100%;
+            border: 0;
+            border-radius: 999px;
+            padding: 0.85rem 1rem;
+            color: #ffffff;
+            background: var(--accent);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .errorlist {
+            margin: 0 0 1rem;
+            padding: 0;
+            list-style: none;
+            color: var(--error);
+            font-weight: 650;
+        }
+    </style>
+</head>
+<body>
+    <main class="login-panel">
+        <img class="brand-logo" src="{% static 'images/mpc-logo-plan.png' %}" alt="MPC Plan">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            {{ form.non_field_errors }}
+            <label for="{{ form.username.id_for_label }}">Usuario</label>
+            {{ form.username.errors }}
+            {{ form.username }}
+            <label for="{{ form.password.id_for_label }}">Contraseña</label>
+            {{ form.password.errors }}
+            {{ form.password }}
+            <button type="submit">Entrar</button>
+        </form>
+    </main>
+</body>
+</html>

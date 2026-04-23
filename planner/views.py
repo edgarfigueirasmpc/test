@@ -1,16 +1,85 @@
+import logging
+from functools import wraps
+from urllib.parse import urlencode
+
 from django.contrib import messages
+from django.contrib.auth import login, logout
 from django.core.exceptions import ValidationError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
 
-from .forms import ProjectForm, WorkLogForm
+from .forms import ProjectForm, StaffLoginForm, WorkLogForm
 from .models import PlannerSettings, Project, WorkLog
 from .services import build_timeline_context
 
+logger = logging.getLogger(__name__)
 
+
+def staff_app_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if request.user.is_authenticated and request.user.is_staff:
+            return view_func(request, *args, **kwargs)
+
+        login_url = reverse("planner:login")
+        query = urlencode({"next": request.get_full_path()})
+        return redirect(f"{login_url}?{query}")
+
+    return wrapper
+
+
+@require_http_methods(["GET", "POST"])
+def app_login(request):
+    next_url = request.POST.get("next") or request.GET.get("next") or reverse("planner:index")
+    if not url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        next_url = reverse("planner:index")
+
+    if request.user.is_authenticated and request.user.is_staff:
+        return redirect(next_url)
+
+    if request.method == "POST":
+        form = StaffLoginForm(request, request.POST)
+        if form.is_valid():
+            login(request, form.user)
+            return redirect(next_url)
+    else:
+        form = StaffLoginForm(request)
+
+    return render(
+        request,
+        "planner/login.html",
+        {
+            "form": form,
+            "next": next_url,
+        },
+    )
+
+
+@require_http_methods(["POST"])
+def app_logout(request):
+    logout(request)
+    return redirect("planner:login")
+
+
+def admin_honeypot(request, path=""):
+    logger.warning(
+        "Admin honeypot hit: path=%s ip=%s user_agent=%s",
+        request.path,
+        request.META.get("REMOTE_ADDR", ""),
+        request.META.get("HTTP_USER_AGENT", ""),
+    )
+    raise Http404
+
+
+@staff_app_required
 @require_http_methods(["GET", "POST"])
 def index(request):
     show_weekends = request.GET.get("show_weekends", "").strip().lower() in {"1", "true", "yes", "on"}

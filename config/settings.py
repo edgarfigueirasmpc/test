@@ -83,13 +83,17 @@ def database_config_from_env():
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-local-dev-key-change-me")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "local-dev-only-change-me-5b9f4c16f1b345f4a8f9d9c1e6a7b8c3",
+)
 
 default_allowed_hosts = [
     "127.0.0.1",
     "localhost",
     "192.168.1.46",
     "192.168.1.36",
+    "192.168.1.39"
 ]
 render_external_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 is_render_environment = bool(render_external_hostname)
@@ -214,6 +218,21 @@ if CLOUDINARY_URL:
     cloudinary.config(cloudinary_url=CLOUDINARY_URL, secure=True)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True)
+    SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", True)
+    CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", True)
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", True)
+else:
+    SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
+    SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", False)
+    CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", False)
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

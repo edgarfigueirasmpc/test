@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -12,6 +13,166 @@ from .models import PlannerSettings, Project, ProjectAttachment, WorkLog, WorkLo
 from .services import build_timeline_context
 
 User = get_user_model()
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    STORAGES={
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+)
+class AdminBackupTests(TestCase):
+    def test_default_admin_url_is_honeypot(self):
+        response = self.client.get("/admin/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_default_admin_nested_urls_are_honeypot(self):
+        response = self.client.get("/admin/login/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_real_admin_uses_private_url(self):
+        response = self.client.get(reverse("admin:index"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith("/mpc-acceso/login/"))
+
+    def test_backup_export_requires_admin_login(self):
+        response = self.client.get(reverse("admin:database_backup_json"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/mpc-acceso/login/", response["Location"])
+
+    def test_backup_export_forbids_non_superuser_staff(self):
+        user = User.objects.create_user(
+            username="staff_no_super",
+            password="secret",
+            is_staff=True,
+            is_superuser=False,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("admin:database_backup_json"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_can_export_database_as_json(self):
+        user = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="secret",
+        )
+        Project.objects.create(
+            name="Backup visible",
+            planned_start_date="2026-03-30",
+            estimated_hours=Decimal("8.00"),
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("admin:database_backup_json"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertIn("attachment;", response["Content-Disposition"])
+        exported = json.loads(response.content)
+        exported_projects = [
+            item for item in exported
+            if item["model"] == "planner.project"
+        ]
+        self.assertEqual(exported_projects[0]["fields"]["name"], "Backup visible")
+
+    def test_backup_import_requires_admin_login(self):
+        response = self.client.get(reverse("admin:database_import_json"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/mpc-acceso/login/", response["Location"])
+
+    def test_backup_import_forbids_non_superuser_staff(self):
+        user = User.objects.create_user(
+            username="staff_no_super_import",
+            password="secret",
+            is_staff=True,
+            is_superuser=False,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("admin:database_import_json"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_can_import_database_json(self):
+        user = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="secret",
+        )
+        fixture = json.dumps(
+            [
+                {
+                    "model": "planner.project",
+                    "pk": 100,
+                    "fields": {
+                        "name": "Proyecto importado",
+                        "description": "",
+                        "planned_start_date": "2026-04-01",
+                        "delivery_date": None,
+                        "requested_by": [],
+                        "assigned_users": [],
+                        "color": "#6b7280",
+                        "is_visible": True,
+                        "estimated_hours": "12.00",
+                        "status": Project.Status.PLANNED,
+                        "notes": "",
+                        "created_at": "2026-04-01T08:00:00Z",
+                        "updated_at": "2026-04-01T08:00:00Z",
+                    },
+                }
+            ]
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("admin:database_import_json"),
+            data={
+                "backup_file": SimpleUploadedFile(
+                    "backup.json",
+                    fixture.encode("utf-8"),
+                    content_type="application/json",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("admin:index"))
+        self.assertTrue(Project.objects.filter(name="Proyecto importado").exists())
+
+    def test_backup_import_rejects_non_json_file(self):
+        user = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="secret",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("admin:database_import_json"),
+            data={
+                "backup_file": SimpleUploadedFile(
+                    "backup.txt",
+                    b"not json",
+                    content_type="text/plain",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sube un archivo .json exportado desde este admin.")
 
 
 class WorkLogModelTests(TestCase):
@@ -248,6 +409,7 @@ class TimelineServiceTests(TestCase):
 
 
 @override_settings(
+    SECURE_SSL_REDIRECT=False,
     STORAGES={
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -258,6 +420,67 @@ class TimelineServiceTests(TestCase):
     }
 )
 class IndexViewTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(
+            username="staff",
+            password="secret",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff_user)
+
+    def test_index_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse("planner:index"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], f"{reverse('planner:login')}?next=%2F")
+
+    def test_index_requires_staff_user(self):
+        regular_user = User.objects.create_user(username="normal", password="secret")
+        self.client.force_login(regular_user)
+
+        response = self.client.get(reverse("planner:index"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], f"{reverse('planner:login')}?next=%2F")
+
+    def test_staff_user_can_login_from_custom_login(self):
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("planner:login"),
+            data={
+                "username": self.staff_user.username,
+                "password": "secret",
+                "next": reverse("planner:index"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("planner:index"))
+
+    def test_regular_user_cannot_login_from_custom_login(self):
+        self.client.logout()
+        User.objects.create_user(username="normal", password="secret")
+
+        response = self.client.post(
+            reverse("planner:login"),
+            data={
+                "username": "normal",
+                "password": "secret",
+                "next": reverse("planner:index"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Este usuario no tiene acceso a la aplicacion.")
+
+    def test_staff_user_can_open_index(self):
+        response = self.client.get(reverse("planner:index"))
+
+        self.assertEqual(response.status_code, 200)
+
     @patch("planner.cloudinary_utils.cloudinary.uploader.upload")
     def test_can_create_work_log_with_attachments_from_index(self, mock_upload):
         mock_upload.return_value = {

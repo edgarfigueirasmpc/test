@@ -26,15 +26,29 @@
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
             color: var(--text);
-            background:
-                radial-gradient(circle at top left, #ffffff 0%, transparent 28%),
-                linear-gradient(180deg, #f6f7f9 0%, #edf0f4 100%);
+            background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+            position: relative;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -20px;
+            background-image: url("{% static 'images/mosaico.png' %}");
+            background-repeat: repeat;
+            background-size: 100px;
+            opacity: 0.24;
+            filter: blur(1px);
+            z-index: 0;
+            pointer-events: none;
         }
 
         main {
             width: min(1480px, calc(100% - 2rem));
             margin: 0 auto;
             padding: 1.5rem 0 3rem;
+            position: relative;
+            z-index: 1;
         }
 
         .panel {
@@ -84,9 +98,31 @@
             box-shadow: none;
         }
 
+        .button.dark {
+            background: #111827;
+            color: #ffffff;
+            box-shadow: 0 10px 18px rgba(17, 24, 39, 0.2);
+        }
+
+        .button.danger {
+            background: #b91c1c;
+            color: #ffffff;
+            box-shadow: 0 10px 18px rgba(185, 28, 28, 0.16);
+        }
+
         .button:hover {
             transform: translateY(-1px);
             box-shadow: 0 14px 22px rgba(75, 85, 99, 0.16);
+        }
+
+        .button.danger:hover {
+            background: #991b1b;
+            box-shadow: 0 14px 22px rgba(185, 28, 28, 0.2);
+        }
+
+        .button.dark:hover {
+            background: #030712;
+            box-shadow: 0 14px 22px rgba(17, 24, 39, 0.28);
         }
 
         .button.secondary:hover {
@@ -998,6 +1034,11 @@
             <button type="button" class="button" data-open-modal>
                 {% if edit_entry %}Seguir editando registro{% else %}Anadir registro diario{% endif %}
             </button>
+            <form method="post" action="{% url 'planner:logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="button danger">Salir</button>
+            </form>
+            <a class="button dark" href="{% url 'admin:index' %}">Acceso privado</a>
         </div>
     </section>
 

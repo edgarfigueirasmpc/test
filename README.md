@@ -27,6 +27,10 @@ La aplicación ya incluye:
 - asignación de uno o varios usuarios ejecutores;
 - cálculo de porcentaje de avance;
 - fecha de entrega y fecha estimada recalculada;
+- login propio para usuarios `staff` en `/entrar/`;
+- panel admin real en `/mpc-acceso/` y honeypot en `/admin/`;
+- exportación/importación de backup JSON desde admin (solo superusuario);
+- hardening de producción para HTTPS, cookies y HSTS según entorno;
 - pruebas automáticas de lógica y flujos principales.
 
 ## Tecnologías usadas
@@ -295,6 +299,12 @@ El admin se usa especialmente para:
 - crear usuarios de Django;
 - revisar proyectos y registros;
 - gestionar configuraciones globales.
+- exportar e importar backup completo en JSON (solo superusuario).
+
+Rutas de administración:
+
+- acceso real: `/mpc-acceso/`
+- honeypot: `/admin/`
 
 ## Lógica de servicios
 
@@ -357,7 +367,8 @@ Desde Django Admin:
 python manage.py createsuperuser
 ```
 
-Luego entra en `/admin/` y crea los usuarios necesarios.
+Luego entra en `/mpc-acceso/` y crea los usuarios necesarios.
+El login de la portada está en `/entrar/` y solo permite usuarios `staff`.
 
 ### Crear un proyecto
 
@@ -461,6 +472,16 @@ python -m gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker
 - `DEBUG=False`
 - `DATABASE_URL`
 - `WEB_CONCURRENCY=4`
+- `ALLOWED_HOSTS=<tu-dominio>`
+
+Variables recomendadas de hardening:
+
+- `SECURE_SSL_REDIRECT=True`
+- `SESSION_COOKIE_SECURE=True`
+- `CSRF_COOKIE_SECURE=True`
+- `SECURE_HSTS_SECONDS=31536000`
+- `SECURE_HSTS_INCLUDE_SUBDOMAINS=True`
+- `SECURE_HSTS_PRELOAD=True`
 
 ### Despliegue manual en Render
 
@@ -482,7 +503,31 @@ También es una buena opción declarar el servicio con `render.yaml`, sobre todo
 - entorno versionado;
 - menor configuración manual.
 
-En este repositorio todavía no lo he generado, pero sería una siguiente mejora razonable.
+En este repositorio ya existe `render.yaml`.
+
+## Seguridad y checklist de release
+
+Comandos recomendados antes de publicar:
+
+```bash
+python manage.py check
+python manage.py check --deploy
+DATABASE_URL=sqlite:///db.sqlite3 python manage.py test planner
+```
+
+Estado actual verificado:
+
+- `check`: OK
+- `test planner`: OK
+- `check --deploy`: OK con ajustes de entorno de producción (`DEBUG=False` y variables seguras)
+
+Checklist rápida para despliegue:
+
+1. Confirmar `SECRET_KEY` robusta y no reutilizada.
+2. Confirmar `DEBUG=False`.
+3. Confirmar `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` del dominio real.
+4. Mantener acceso real en `/mpc-acceso/` y no publicar `/admin/`.
+5. Revisar que backup/import de base de datos quede restringido a superusuarios.
 
 ## Mejoras futuras recomendadas
 
