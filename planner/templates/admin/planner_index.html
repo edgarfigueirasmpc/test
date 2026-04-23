@@ -1,0 +1,17 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+<div class="module" style="padding: 16px; margin-bottom: 20px;">
+  <h2 style="margin-top: 0;">Backup de la base de datos</h2>
+  <p style="margin: 0 0 12px;">
+    Descarga un JSON legible con los datos gestionados por Django.
+  </p>
+  <a class="button" href="{% url 'admin:database_backup_json' %}">
+    Exportar backup JSON
+  </a>
+  <a class="button" href="{% url 'admin:database_import_json' %}" style="margin-left: 8px;">
+    Cargar backup JSON
+  </a>
+</div>
+{{ block.super }}
+{% endblock %}

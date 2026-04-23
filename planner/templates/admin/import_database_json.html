@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; Importar backup JSON
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module" style="padding: 16px; max-width: 760px;">
+  <h1 style="margin-top: 0;">Importar backup JSON</h1>
+  <p>
+    Sube un archivo generado con el boton de exportacion. Los objetos con la
+    misma clave primaria se actualizaran y los nuevos se crearan.
+  </p>
+  <p class="help">
+    Haz un backup antes de importar. Esta accion modifica la base de datos.
+  </p>
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-row">
+      {{ form.backup_file.errors }}
+      {{ form.backup_file.label_tag }}
+      {{ form.backup_file }}
+    </div>
+    <div class="submit-row">
+      <input type="submit" value="Importar backup" class="default">
+      <a class="button cancel-link" href="{% url 'admin:index' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

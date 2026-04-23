@@ -1,5 +1,15 @@
-from django.contrib import admin
 from django import forms
+from django.apps import apps
+from django.contrib import admin
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.core import serializers
+from django.core.serializers.base import DeserializationError
+from django.db import transaction
+from django.http import HttpResponse
+from django.shortcuts import redirect, render
+from django.urls import path
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from .models import (
@@ -9,6 +19,100 @@ from .models import (
     WorkLog,
     WorkLogAttachment,
 )
+
+
+class DatabaseImportForm(forms.Form):
+    backup_file = forms.FileField(label="Archivo JSON")
+
+    def clean_backup_file(self):
+        backup_file = self.cleaned_data["backup_file"]
+        if not backup_file.name.lower().endswith(".json"):
+            raise forms.ValidationError("Sube un archivo .json exportado desde este admin.")
+        return backup_file
+
+
+def export_database_json(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Solo un superusuario puede exportar backups completos.")
+
+    objects = []
+    for model in apps.get_models():
+        if model._meta.proxy or not model._meta.managed:
+            continue
+        objects.extend(model._default_manager.all().order_by(model._meta.pk.name))
+
+    exported_at = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+    data = serializers.serialize("json", objects, indent=2)
+    response = HttpResponse(data, content_type="application/json")
+    response["Content-Disposition"] = (
+        f'attachment; filename="planner-backup-{exported_at}.json"'
+    )
+    return response
+
+
+def import_database_json(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Solo un superusuario puede importar backups completos.")
+
+    if request.method == "POST":
+        form = DatabaseImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            backup_file = form.cleaned_data["backup_file"]
+            try:
+                raw_data = backup_file.read().decode("utf-8")
+                objects = list(serializers.deserialize("json", raw_data))
+                with transaction.atomic():
+                    for obj in objects:
+                        obj.save()
+            except (UnicodeDecodeError, DeserializationError, ValueError) as exc:
+                form.add_error(
+                    "backup_file",
+                    f"No se pudo leer el JSON de backup: {exc}",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Backup importado correctamente: {len(objects)} objetos cargados.",
+                )
+                return redirect("admin:index")
+    else:
+        form = DatabaseImportForm()
+
+    return render(
+        request,
+        "admin/import_database_json.html",
+        {
+            **admin.site.each_context(request),
+            "form": form,
+            "title": "Importar backup JSON",
+        },
+    )
+
+
+original_get_urls = admin.site.get_urls
+
+
+def get_admin_urls_with_backup():
+    custom_urls = [
+        path(
+            "backup/export-json/",
+            admin.site.admin_view(export_database_json),
+            name="database_backup_json",
+        ),
+        path(
+            "backup/import-json/",
+            admin.site.admin_view(import_database_json),
+            name="database_import_json",
+        ),
+    ]
+    return custom_urls + original_get_urls()
+
+
+admin.site.get_urls = get_admin_urls_with_backup
+admin.site.index_template = "admin/planner_index.html"
+admin.site.site_header = "Planner admin"
+admin.site.site_title = "Planner admin"
+admin.site.index_title = "Administracion"
 
 
 class ProjectAdminForm(forms.ModelForm):

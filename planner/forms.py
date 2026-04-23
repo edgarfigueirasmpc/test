@@ -1,9 +1,38 @@
 from django import forms
+from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 
 from .models import Project, ProjectAttachment, WorkLog, WorkLogAttachment
 
 User = get_user_model()
+
+
+class StaffLoginForm(forms.Form):
+    username = forms.CharField(label="Usuario", max_length=150)
+    password = forms.CharField(label="Contrasena", widget=forms.PasswordInput)
+
+    def __init__(self, request, *args, **kwargs):
+        self.request = request
+        self.user = None
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        username = cleaned_data.get("username")
+        password = cleaned_data.get("password")
+
+        if username and password:
+            self.user = authenticate(
+                self.request,
+                username=username,
+                password=password,
+            )
+            if self.user is None:
+                raise forms.ValidationError("Usuario o contrasena incorrectos.")
+            if not self.user.is_active or not self.user.is_staff:
+                raise forms.ValidationError("Este usuario no tiene acceso a la aplicacion.")
+
+        return cleaned_data
 
 
 class MultipleFileInput(forms.ClearableFileInput):
