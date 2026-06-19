@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 
-from .models import Project, ProjectAttachment, WorkLog, WorkLogAttachment
+from .models import Project, ProjectAttachment, ProjectTask, WorkLog, WorkLogAttachment
 
 User = get_user_model()
 
@@ -118,6 +118,28 @@ class WorkLogForm(forms.ModelForm):
         ordered_users = User.objects.order_by("username")
         self.fields["requested_by"].queryset = ordered_users
         self.fields["assigned_users"].queryset = ordered_users
+        self.fields["task"].queryset = ProjectTask.objects.select_related("project").order_by(
+            "project__planned_start_date",
+            "project__name",
+            "order",
+            "name",
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        task = cleaned_data.get("task")
+        project = cleaned_data.get("project")
+
+        if task and not project:
+            cleaned_data["project"] = task.project
+            self.instance.project = task.project
+        elif task and project and task.project_id != project.id:
+            self.add_error(
+                "task",
+                "La parte seleccionada pertenece a otro proyecto.",
+            )
+
+        return cleaned_data
 
     def save_attachments(self, work_log):
         for uploaded_file in self.cleaned_data.get("attachments", []):
@@ -131,6 +153,7 @@ class WorkLogForm(forms.ModelForm):
             "assigned_users",
             "work_type",
             "project",
+            "task",
             "description",
             "actual_hours",
             "notes",

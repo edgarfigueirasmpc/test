@@ -170,6 +170,12 @@ class WorkLog(models.Model):
     def clean(self):
         errors = {}
 
+        if self.task and not self.project:
+            self.project = self.task.project
+
+        if self.task and self.project and self.task.project_id != self.project_id:
+            errors["task"] = "La parte seleccionada pertenece a otro proyecto."
+
         if self.work_type == self.WorkType.PROJECT and not self.project:
             errors["project"] = "Selecciona un proyecto para el trabajo de proyecto."
 

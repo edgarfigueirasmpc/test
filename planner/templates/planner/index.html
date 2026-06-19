@@ -624,6 +624,51 @@
             font-weight: 600;
         }
 
+        .task-list {
+            display: grid;
+            gap: 0.55rem;
+            margin: 0.85rem 0 0;
+        }
+
+        .task-row {
+            border: 1px solid color-mix(in srgb, var(--project-color, var(--accent-strong)) 16%, var(--border));
+            border-radius: 14px;
+            background: rgba(248, 250, 252, 0.78);
+            padding: 0.65rem 0.75rem;
+        }
+
+        .task-row-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.8rem;
+            margin-bottom: 0.45rem;
+        }
+
+        .task-row strong {
+            font-size: 0.95rem;
+        }
+
+        .task-row small {
+            color: var(--muted);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .task-progress-track {
+            height: 0.45rem;
+            border-radius: 999px;
+            background: #e5e7eb;
+            overflow: hidden;
+        }
+
+        .task-progress-fill {
+            height: 100%;
+            width: calc(var(--task-progress, 0) * 1%);
+            border-radius: inherit;
+            background: var(--project-color, var(--accent-strong));
+        }
+
         .project-card .project-stats span {
             border-color: color-mix(in srgb, var(--project-color, var(--accent-strong)) 20%, var(--border));
         }
@@ -972,11 +1017,13 @@
             .logs-table td:nth-child(1)::before { content: "Fecha"; }
             .logs-table td:nth-child(2)::before { content: "Tipo"; }
             .logs-table td:nth-child(3)::before { content: "Proyecto"; }
-            .logs-table td:nth-child(4)::before { content: "Solicita"; }
-            .logs-table td:nth-child(5)::before { content: "Realizan"; }
-            .logs-table td:nth-child(6)::before { content: "Horas"; }
-            .logs-table td:nth-child(7)::before { content: "Descripcion"; }
-            .logs-table td:nth-child(8)::before { content: "Accion"; }
+            .logs-table td:nth-child(4)::before { content: "Parte"; }
+            .logs-table td:nth-child(5)::before { content: "Solicita"; }
+            .logs-table td:nth-child(6)::before { content: "Realizan"; }
+            .logs-table td:nth-child(7)::before { content: "Horas"; }
+            .logs-table td:nth-child(8)::before { content: "Descripcion"; }
+            .logs-table td:nth-child(9)::before { content: "Adjuntos"; }
+            .logs-table td:nth-child(10)::before { content: "Accion"; }
 
             .logs-table-shell.is-scrollable {
                 max-height: 26rem;
@@ -1127,6 +1174,25 @@
                                     {% endif %}
                                 </div>
                             {% endif %}
+                            {% if item.tasks %}
+                                <div class="task-list" aria-label="Partes del proyecto">
+                                    {% for task_item in item.tasks %}
+                                        <div class="task-row" style="--task-progress: {{ task_item.progress_percent|floatformat:0 }};">
+                                            <div class="task-row-head">
+                                                <strong>{{ task_item.task.name }}</strong>
+                                                <small>{{ task_item.progress_percent|floatformat:0 }}%</small>
+                                            </div>
+                                            <div class="task-progress-track" aria-hidden="true">
+                                                <div class="task-progress-fill"></div>
+                                            </div>
+                                            <p class="meta" style="margin: 0.45rem 0 0;">
+                                                {{ task_item.logged_hours }} h de {{ task_item.estimated_hours }} h
+                                                {% if task_item.remaining_hours > 0 %} · pendiente {{ task_item.remaining_hours }} h{% endif %}
+                                            </p>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                             <div class="project-stats">
                                 <span>Inicio: {{ item.project.planned_start_date|date:"d/m/Y" }}</span>
                                 {% if item.delivery_date %}
@@ -1174,6 +1240,7 @@
                             <th>Fecha</th>
                             <th>Tipo</th>
                             <th>Proyecto</th>
+                            <th>Parte</th>
                             <th>Solicita</th>
                             <th>Realizan</th>
                             <th>Horas</th>
@@ -1188,6 +1255,7 @@
                                 <td>{{ log.date|date:"d/m/Y" }}</td>
                                 <td>{{ log.get_work_type_display }}</td>
                                 <td>{% if log.project %}{{ log.project.name }}{% else %}-{% endif %}</td>
+                                <td>{% if log.task %}{{ log.task.name }}{% else %}-{% endif %}</td>
                                 <td>{% for user in log.requested_by.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
                                 <td>{% for user in log.assigned_users.all %}{% if not forloop.first %}, {% endif %}{{ user.username }}{% empty %}-{% endfor %}</td>
                                 <td>{{ log.actual_hours }} h</td>
@@ -1589,8 +1657,9 @@
 
                 if (info.view.type === "listDay") {
                     if (props.eventType === "worklog" && props.projectId) {
+                        const label = props.taskName || props.description || props.projectName;
                         return {
-                            html: `<div class="day-worklog-entry"><span class="day-worklog-kicker">Trabajo real</span><span>${props.description || props.projectName} · ${props.hours} h</span></div>`,
+                            html: `<div class="day-worklog-entry"><span class="day-worklog-kicker">Trabajo real</span><span>${label} · ${props.hours} h</span></div>`,
                         };
                     }
                     return { html: `<div>${title}</div>` };

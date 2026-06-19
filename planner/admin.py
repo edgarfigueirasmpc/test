@@ -16,6 +16,7 @@ from .models import (
     PlannerSettings,
     Project,
     ProjectAttachment,
+    ProjectTask,
     WorkLog,
     WorkLogAttachment,
 )
@@ -124,6 +125,19 @@ class ProjectAdminForm(forms.ModelForm):
         }
 
 
+class ProjectTaskInline(admin.TabularInline):
+    model = ProjectTask
+    extra = 1
+    fields = (
+        "order",
+        "name",
+        "estimated_hours",
+        "planned_start_date",
+        "planned_end_date",
+        "status",
+    )
+
+
 class AttachmentAdminForm(forms.ModelForm):
     upload = forms.FileField(label="archivo", required=False)
 
@@ -174,6 +188,7 @@ class ProjectAdmin(admin.ModelAdmin):
     search_fields = ("name", "description", "notes")
     filter_horizontal = ("requested_by", "assigned_users")
     readonly_fields = ("attachments_preview",)
+    inlines = (ProjectTaskInline,)
 
     def attachments_total(self, obj):
         return obj.attachments.count()
@@ -195,12 +210,29 @@ class ProjectAdmin(admin.ModelAdmin):
     attachments_preview.short_description = "adjuntos"
 
 
+@admin.register(ProjectTask)
+class ProjectTaskAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "project",
+        "order",
+        "estimated_hours",
+        "planned_start_date",
+        "planned_end_date",
+        "status",
+    )
+    list_filter = ("status", "project")
+    search_fields = ("name", "description", "project__name")
+    autocomplete_fields = ("project",)
+    ordering = ("project__planned_start_date", "project__name", "order", "id")
+
+
 @admin.register(WorkLog)
 class WorkLogAdmin(admin.ModelAdmin):
-    list_display = ("date", "project", "work_type", "actual_hours", "attachments_total")
+    list_display = ("date", "project", "task", "work_type", "actual_hours", "attachments_total")
     list_filter = ("work_type", "date", "project")
-    search_fields = ("description", "notes", "project__name", "requested_by__username")
-    autocomplete_fields = ("project",)
+    search_fields = ("description", "notes", "project__name", "task__name", "requested_by__username")
+    autocomplete_fields = ("project", "task")
     filter_horizontal = ("requested_by", "assigned_users")
     date_hierarchy = "date"
     readonly_fields = ("attachments_preview",)

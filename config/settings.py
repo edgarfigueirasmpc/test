@@ -93,7 +93,8 @@ default_allowed_hosts = [
     "localhost",
     "192.168.1.46",
     "192.168.1.36",
-    "192.168.1.39"
+    "192.168.1.39",
+    "192.168.1.118"
 ]
 render_external_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 is_render_environment = bool(render_external_hostname)

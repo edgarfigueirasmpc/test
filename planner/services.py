@@ -138,15 +138,16 @@ def build_timeline_context(scale="month"):
     today = timezone.localdate()
     settings = PlannerSettings.get_solo()
     projects = list(
-        Project.objects.prefetch_related("requested_by", "assigned_users").all()
+        Project.objects.prefetch_related("requested_by", "assigned_users", "tasks").all()
     )
     work_logs = list(
-        WorkLog.objects.select_related("project")
+        WorkLog.objects.select_related("project", "task")
         .prefetch_related("requested_by", "assigned_users")
         .order_by("-date", "-id")
     )
 
     project_hours = defaultdict(lambda: ZERO)
+    task_hours = defaultdict(lambda: ZERO)
     project_last_log = {}
     other_hours = ZERO
     daily_markers = defaultdict(lambda: {"planned": [], "actual": [], "other": False})
@@ -154,6 +155,8 @@ def build_timeline_context(scale="month"):
     for work_log in work_logs:
         if work_log.work_type == WorkLog.WorkType.PROJECT and work_log.project_id:
             project_hours[work_log.project_id] += work_log.actual_hours
+            if work_log.task_id:
+                task_hours[work_log.task_id] += work_log.actual_hours
             last_log = project_last_log.get(work_log.project_id)
             if last_log is None or work_log.date > last_log:
                 project_last_log[work_log.project_id] = work_log.date
@@ -248,9 +251,29 @@ def build_timeline_context(scale="month"):
             "delivery_delay_days": delivery_delay_days,
             "delivery_margin_days": delivery_margin_days,
             "blocking_hours": _quantize(blocking_hours),
+            "tasks": [],
             "requested_by_names": [user.get_username() for user in project.requested_by.all()],
             "assigned_user_names": [user.get_username() for user in project.assigned_users.all()],
         }
+
+        for task in project.tasks.all():
+            task_logged_hours = _quantize(task_hours[task.id])
+            task_remaining_hours = _quantize(max(task.estimated_hours - task_logged_hours, ZERO))
+            task_progress_percent = (
+                min(round((task_logged_hours / task.estimated_hours) * 100, 2), 100)
+                if task.estimated_hours > ZERO
+                else 0
+            )
+            summary["tasks"].append(
+                {
+                    "task": task,
+                    "estimated_hours": _quantize(task.estimated_hours),
+                    "logged_hours": task_logged_hours,
+                    "remaining_hours": task_remaining_hours,
+                    "progress_percent": task_progress_percent,
+                }
+            )
+
         project_summaries.append(summary)
         project_display_order[project.id] = position * 10
 
@@ -309,7 +332,8 @@ def build_timeline_context(scale="month"):
         if work_log.work_type == WorkLog.WorkType.PROJECT and work_log.project_id:
             background_color = work_log.project.color
             text_color = _contrast_text_color(background_color)
-            title = f"{work_log.project.name}: {work_log.actual_hours} h"
+            worklog_label = work_log.task.name if work_log.task_id else work_log.project.name
+            title = f"{worklog_label}: {work_log.actual_hours} h"
             class_names = ["worklog-event", "project-worklog-event"]
             display_order = project_display_order.get(work_log.project_id, 10_000) + 1
         else:
@@ -335,6 +359,8 @@ def build_timeline_context(scale="month"):
                     "editId": work_log.id,
                     "projectId": work_log.project_id,
                     "projectName": work_log.project.name if work_log.project_id else "",
+                    "taskId": work_log.task_id,
+                    "taskName": work_log.task.name if work_log.task_id else "",
                     "workType": work_log.work_type,
                     "description": work_log.description,
                     "hours": str(work_log.actual_hours),

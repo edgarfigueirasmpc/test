@@ -9,7 +9,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import PlannerSettings, Project, ProjectAttachment, WorkLog, WorkLogAttachment
+from .models import (
+    PlannerSettings,
+    Project,
+    ProjectAttachment,
+    ProjectTask,
+    WorkLog,
+    WorkLogAttachment,
+)
 from .services import build_timeline_context
 
 User = get_user_model()
@@ -204,6 +211,35 @@ class WorkLogModelTests(TestCase):
         with self.assertRaises(ValidationError):
             work_log.full_clean()
 
+    def test_project_task_must_belong_to_selected_project(self):
+        project = Project.objects.create(
+            name="ERP",
+            planned_start_date="2026-03-30",
+            estimated_hours=Decimal("14.00"),
+        )
+        other_project = Project.objects.create(
+            name="Web",
+            planned_start_date="2026-03-31",
+            estimated_hours=Decimal("7.00"),
+        )
+        task = ProjectTask.objects.create(
+            project=other_project,
+            name="Diseno",
+            order=1,
+            estimated_hours=Decimal("7.00"),
+        )
+        work_log = WorkLog(
+            date="2026-03-30",
+            project=project,
+            task=task,
+            description="Trabajo cruzado",
+            actual_hours=Decimal("2.00"),
+            work_type=WorkLog.WorkType.PROJECT,
+        )
+
+        with self.assertRaises(ValidationError):
+            work_log.full_clean()
+
 
 class TimelineServiceTests(TestCase):
     def test_project_remaining_hours_and_projected_end_use_seven_hours_per_day(self):
@@ -227,6 +263,35 @@ class TimelineServiceTests(TestCase):
         self.assertEqual(summary["baseline_end"].isoformat(), "2026-04-01")
         self.assertEqual(summary["projected_end"].isoformat(), "2026-03-31")
         self.assertEqual(summary["progress_percent"], 45.0)
+
+    def test_project_tasks_include_logged_progress(self):
+        project = Project.objects.create(
+            name="Web nueva",
+            planned_start_date="2026-03-30",
+            estimated_hours=Decimal("20.00"),
+        )
+        task = ProjectTask.objects.create(
+            project=project,
+            name="Maquetacion",
+            order=1,
+            estimated_hours=Decimal("10.00"),
+        )
+        WorkLog.objects.create(
+            date="2026-03-30",
+            project=project,
+            task=task,
+            description="Primer bloque",
+            actual_hours=Decimal("4.00"),
+            work_type=WorkLog.WorkType.PROJECT,
+        )
+
+        context = build_timeline_context(scale="day")
+        task_summary = context["projects"][0]["tasks"][0]
+
+        self.assertEqual(task_summary["task"], task)
+        self.assertEqual(task_summary["logged_hours"], Decimal("4.00"))
+        self.assertEqual(task_summary["remaining_hours"], Decimal("6.00"))
+        self.assertEqual(task_summary["progress_percent"], 40.0)
 
     def test_other_work_delays_incomplete_projects(self):
         project = Project.objects.create(
@@ -324,7 +389,9 @@ class TimelineServiceTests(TestCase):
         self.assertNotIn(f"project-{hidden_project.id}", project_event_ids)
 
     def test_other_work_visibility_can_hide_external_logs_from_calendar(self):
-        PlannerSettings.objects.create(show_other_work=False)
+        settings = PlannerSettings.get_solo()
+        settings.show_other_work = False
+        settings.save(update_fields=["show_other_work"])
         WorkLog.objects.create(
             date="2026-03-30",
             description="Trabajo externo",
@@ -567,6 +634,12 @@ class IndexViewTests(TestCase):
             planned_start_date="2026-03-30",
             estimated_hours=Decimal("12.00"),
         )
+        task = ProjectTask.objects.create(
+            project=project,
+            name="Frontend",
+            order=1,
+            estimated_hours=Decimal("6.00"),
+        )
 
         response = self.client.post(
             reverse("planner:index"),
@@ -576,6 +649,7 @@ class IndexViewTests(TestCase):
                 "requested_by": [requester.pk, requester_two.pk],
                 "assigned_users": [worker_one.pk, worker_two.pk],
                 "project": project.pk,
+                "task": task.pk,
                 "description": "Primer bloque",
                 "actual_hours": "2.50",
                 "work_type": WorkLog.WorkType.PROJECT,
@@ -586,6 +660,7 @@ class IndexViewTests(TestCase):
         self.assertRedirects(response, reverse("planner:index"))
         work_log = WorkLog.objects.get()
         self.assertEqual(work_log.actual_hours, Decimal("2.50"))
+        self.assertEqual(work_log.task, task)
         self.assertEqual(
             list(work_log.requested_by.order_by("username").values_list("username", flat=True)),
             ["jefe", "solicita"],
@@ -604,6 +679,7 @@ class IndexViewTests(TestCase):
                 "requested_by": [requester_two.pk],
                 "assigned_users": [worker_two.pk],
                 "project": project.pk,
+                "task": task.pk,
                 "description": "Primer bloque actualizado",
                 "actual_hours": "3.00",
                 "work_type": WorkLog.WorkType.PROJECT,

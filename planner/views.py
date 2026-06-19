@@ -92,7 +92,7 @@ def index(request):
     edit_entry = None
     edit_id = request.GET.get("edit")
     if edit_id:
-        edit_entry = get_object_or_404(WorkLog.objects.select_related("project"), pk=edit_id)
+        edit_entry = get_object_or_404(WorkLog.objects.select_related("project", "task"), pk=edit_id)
     edit_project_id = request.GET.get("edit_project")
     if edit_project_id:
         edit_project = get_object_or_404(Project, pk=edit_project_id)
@@ -179,7 +179,7 @@ def index(request):
             "selected_date": selected_date,
             "show_form_modal": bool(edit_entry or worklog_form.errors),
             "show_project_modal": bool(edit_project or project_form.errors),
-            "recent_logs": WorkLog.objects.select_related("project").prefetch_related("requested_by", "assigned_users", "attachments")[:15],
+            "recent_logs": WorkLog.objects.select_related("project", "task").prefetch_related("requested_by", "assigned_users", "attachments")[:15],
         }
     )
     return render(request, "planner/index.html", context)
