@@ -7,6 +7,27 @@ from .models import Project, ProjectAttachment, ProjectTask, WorkLog, WorkLogAtt
 User = get_user_model()
 
 
+def build_user_choices():
+    """Lista de opciones de usuario lista para reutilizar entre formularios.
+
+    Cada campo con CheckboxSelectMultiple evalua su queryset al renderizarse, asi
+    que sin esto la portada lanza una consulta a auth_user por cada uno de los
+    cuatro campos de usuario.
+    """
+    return [(user.pk, str(user)) for user in User.objects.order_by("username")]
+
+
+def _apply_user_choices(form, field_names, user_choices):
+    ordered_users = User.objects.order_by("username")
+    for field_name in field_names:
+        field = form.fields[field_name]
+        # El queryset sigue haciendo falta para validar el POST; es perezoso y no
+        # consulta nada mientras nadie lo recorra.
+        field.queryset = ordered_users
+        if user_choices is not None:
+            field.choices = user_choices
+
+
 class StaffLoginForm(forms.Form):
     username = forms.CharField(label="Usuario", max_length=150)
     password = forms.CharField(label="Contrasena", widget=forms.PasswordInput)
@@ -54,11 +75,9 @@ class MultipleFileField(forms.FileField):
 class ProjectForm(forms.ModelForm):
     attachments = MultipleFileField(required=False, label="adjuntos")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user_choices=None, **kwargs):
         super().__init__(*args, **kwargs)
-        ordered_users = User.objects.order_by("username")
-        self.fields["requested_by"].queryset = ordered_users
-        self.fields["assigned_users"].queryset = ordered_users
+        _apply_user_choices(self, ("requested_by", "assigned_users"), user_choices)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -113,11 +132,9 @@ class ProjectForm(forms.ModelForm):
 class WorkLogForm(forms.ModelForm):
     attachments = MultipleFileField(required=False, label="adjuntos")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user_choices=None, **kwargs):
         super().__init__(*args, **kwargs)
-        ordered_users = User.objects.order_by("username")
-        self.fields["requested_by"].queryset = ordered_users
-        self.fields["assigned_users"].queryset = ordered_users
+        _apply_user_choices(self, ("requested_by", "assigned_users"), user_choices)
         self.fields["task"].queryset = ProjectTask.objects.select_related("project").order_by(
             "project__planned_start_date",
             "project__name",

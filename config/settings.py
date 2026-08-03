@@ -61,15 +61,25 @@ def database_config_from_env():
         }
 
     if scheme in {"postgres", "postgresql"}:
+        host = parsed.hostname or ""
+        port = str(parsed.port or "")
+        # Supabase expone pgbouncer en modo "transaction" (puerto 6543). Ahi los
+        # cursores de servidor no funcionan, porque cada sentencia puede caer en
+        # una conexion distinta del pool.
+        behind_transaction_pooler = "pooler." in host or port == "6543"
         return {
             "default": {
                 "ENGINE": "django.db.backends.postgresql",
                 "NAME": unquote(parsed.path.lstrip("/")),
                 "USER": unquote(parsed.username or ""),
                 "PASSWORD": unquote(parsed.password or ""),
-                "HOST": parsed.hostname or "",
-                "PORT": str(parsed.port or ""),
-                "CONN_MAX_AGE": int(os.getenv("CONN_MAX_AGE", "60")),
+                "HOST": host,
+                "PORT": port,
+                # Reutilizar la conexion evita pagar handshake TCP + TLS contra
+                # Supabase en cada peticion.
+                "CONN_MAX_AGE": int(os.getenv("CONN_MAX_AGE", "600")),
+                "CONN_HEALTH_CHECKS": True,
+                "DISABLE_SERVER_SIDE_CURSORS": behind_transaction_pooler,
                 "OPTIONS": {
                     "sslmode": os.getenv("DB_SSLMODE", "require"),
                 },
@@ -100,14 +110,21 @@ render_external_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 is_render_environment = bool(render_external_hostname)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# En Render se inyecta RENDER_EXTERNAL_HOSTNAME automaticamente, asi que
-# si DEBUG no esta definido forzamos un comportamiento de produccion.
-DEBUG = env_bool("DEBUG", default=not is_render_environment)
+# En Render se inyecta RENDER_EXTERNAL_HOSTNAME automaticamente. Ahi DEBUG queda
+# forzado a False pase lo que pase: con DEBUG activo Django acumula todas las
+# consultas SQL en memoria (el worker acaba muriendo por OOM en el plan free),
+# desactiva el cached template loader y sirve los estaticos sin hash ni cache.
+DEBUG = False if is_render_environment else env_bool("DEBUG", default=True)
 
-if render_external_hostname:
-    default_allowed_hosts.append(render_external_hostname)
-
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=default_allowed_hosts)
+# En Render el hostname real siempre se acepta, aunque ALLOWED_HOSTS venga de una
+# variable de entorno. Si no, al recrear el servicio (URL nueva) con la variable
+# apuntando a la URL vieja, Django responderia 400 a todo.
+if is_render_environment:
+    ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=[])
+    if render_external_hostname not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(render_external_hostname)
+else:
+    ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=default_allowed_hosts)
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[])
 if render_external_hostname:
     render_origin = f"https://{render_external_hostname}"
@@ -213,6 +230,21 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Los ficheros con hash en el nombre son inmutables: el navegador no deberia
+# volver a pedirlos nunca. Sin esto WhiteNoise responde max-age=0.
+WHITENOISE_MAX_AGE = 31536000
+
+# El indice de sesiones vive en Postgres; cachearlo en memoria del worker ahorra
+# una consulta transatlantica en cada peticion autenticada.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "planner",
+        "TIMEOUT": 300,
+    }
+}
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
 CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "").strip()
 if CLOUDINARY_URL:

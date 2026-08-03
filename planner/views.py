@@ -12,7 +12,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
 
-from .forms import ProjectForm, StaffLoginForm, WorkLogForm
+from .forms import ProjectForm, StaffLoginForm, WorkLogForm, build_user_choices
 from .models import PlannerSettings, Project, WorkLog
 from .services import build_timeline_context
 
@@ -115,17 +115,24 @@ def index(request):
             project.is_visible = visible_value
             project.save(update_fields=["is_visible"])
             return JsonResponse({"ok": True, "scope": "project", "projectId": project.pk, "isVisible": project.is_visible})
-        elif form_type == "project":
+
+        # La rama de visibilidad ya ha respondido, aqui siempre se renderizan los
+        # dos formularios: los usuarios se consultan una sola vez para ambos.
+        user_choices = build_user_choices()
+
+        if form_type == "project":
             project_id = request.POST.get("project_id")
             project_instance = None
             if project_id:
                 project_instance = get_object_or_404(Project, pk=project_id)
 
-            project_form = ProjectForm(request.POST, request.FILES, instance=project_instance)
+            project_form = ProjectForm(
+                request.POST, request.FILES, instance=project_instance, user_choices=user_choices
+            )
             worklog_initial = {}
             if selected_date:
                 worklog_initial["date"] = selected_date
-            worklog_form = WorkLogForm(initial=worklog_initial)
+            worklog_form = WorkLogForm(initial=worklog_initial, user_choices=user_choices)
 
             if project_form.is_valid():
                 try:
@@ -145,8 +152,10 @@ def index(request):
             instance = None
             if entry_id:
                 instance = get_object_or_404(WorkLog, pk=entry_id)
-            worklog_form = WorkLogForm(request.POST, request.FILES, instance=instance)
-            project_form = ProjectForm(instance=edit_project)
+            worklog_form = WorkLogForm(
+                request.POST, request.FILES, instance=instance, user_choices=user_choices
+            )
+            project_form = ProjectForm(instance=edit_project, user_choices=user_choices)
             if worklog_form.is_valid():
                 try:
                     with transaction.atomic():
@@ -161,11 +170,12 @@ def index(request):
                     return redirect(f"{reverse('planner:index')}?scale={scale}")
             edit_entry = instance
     else:
+        user_choices = build_user_choices()
         initial = {}
         if selected_date and not edit_entry:
             initial["date"] = selected_date
-        worklog_form = WorkLogForm(instance=edit_entry, initial=initial)
-        project_form = ProjectForm(instance=edit_project)
+        worklog_form = WorkLogForm(instance=edit_entry, initial=initial, user_choices=user_choices)
+        project_form = ProjectForm(instance=edit_project, user_choices=user_choices)
 
     context = build_timeline_context(scale=scale)
     context.update(
@@ -179,7 +189,6 @@ def index(request):
             "selected_date": selected_date,
             "show_form_modal": bool(edit_entry or worklog_form.errors),
             "show_project_modal": bool(edit_project or project_form.errors),
-            "recent_logs": WorkLog.objects.select_related("project", "task").prefetch_related("requested_by", "assigned_users", "attachments")[:15],
         }
     )
     return render(request, "planner/index.html", context)

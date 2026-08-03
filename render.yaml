@@ -1,16 +1,33 @@
 services:
   - type: web
-    name: test
+    name: planificador
     runtime: python
     plan: free
+    # La BD esta en Supabase eu-west-1 (Irlanda): el servicio web debe estar al
+    # lado o cada consulta SQL cruza el Atlantico. La region NO se puede cambiar
+    # en un servicio ya creado, hay que recrearlo.
+    region: frankfurt
+    branch: develop
     buildCommand: ./build.sh
-    startCommand: gunicorn config.wsgi:application
+    # Con 1 worker sincrono una peticion lenta bloquea a todas las demas. Los
+    # threads son casi gratis en RAM y la carga aqui es espera de red, no CPU.
+    # --max-requests recicla los workers para acotar el crecimiento de memoria
+    # dentro de los 512 MB del plan free.
+    startCommand: gunicorn config.wsgi:application --workers 2 --threads 4 --timeout 60 --max-requests 500 --max-requests-jitter 50
     envVars:
       - key: SECRET_KEY
         generateValue: true
-      - key: DEBUG
-        value: "False"
+      # Solo el dominio propio. El hostname *.onrender.com del servicio se anade
+      # solo desde RENDER_EXTERNAL_HOSTNAME (ver config/settings.py), asi que
+      # esto sigue valiendo aunque se recree el servicio y cambie esa URL.
       - key: ALLOWED_HOSTS
-        value: planificador-562x.onrender.com
+        value: www.mpc1.es,mpc1.es
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://planificador-562x.onrender.com
+        value: https://www.mpc1.es,https://mpc1.es
+      - key: PYTHON_VERSION
+        value: "3.13.4"
+      # Secretos: Render los pide al crear el Blueprint, no se guardan en el repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false

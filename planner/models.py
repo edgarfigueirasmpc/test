@@ -113,7 +113,7 @@ class WorkLog(models.Model):
         PROJECT = "project_work", "Trabajo de proyecto"
         OTHER = "other_work", "Trabajo no asociado a proyecto"
 
-    date = models.DateField("fecha")
+    date = models.DateField("fecha", db_index=True)
     requested_by = models.ManyToManyField(
         User,
         related_name="requested_work_logs",

@@ -1,13 +1,16 @@
+from bisect import bisect_left
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
+from django.db.models import prefetch_related_objects
 from django.utils import timezone
 
 from .models import PlannerSettings, Project, WorkLog
 
 DAILY_PROJECT_CAPACITY = Decimal("7.00")
 ZERO = Decimal("0.00")
+RECENT_LOG_COUNT = 15
 def _quantize(value):
     return value.quantize(Decimal("0.01"))
 
@@ -134,11 +137,29 @@ def _slot_span(start_value, end_value, scale, slot_index):
     return _slot_start(end_value, scale, slot_index) - _slot_start(start_value, scale, slot_index) + 1
 
 
+def _hours_index(entries):
+    """Indexa (fecha, horas) para poder sumar por rango sin recorrer la lista."""
+    ordered = sorted(entries, key=lambda entry: entry[0])
+    dates = [entry[0] for entry in ordered]
+    cumulative = [ZERO]
+    for _, hours in ordered:
+        cumulative.append(cumulative[-1] + hours)
+    return dates, cumulative
+
+
+def _hours_since(index, start_date):
+    """Suma de horas con fecha >= start_date, en O(log n)."""
+    dates, cumulative = index
+    return cumulative[-1] - cumulative[bisect_left(dates, start_date)]
+
+
 def build_timeline_context(scale="month"):
     today = timezone.localdate()
     settings = PlannerSettings.get_solo()
     projects = list(
-        Project.objects.prefetch_related("requested_by", "assigned_users", "tasks").all()
+        Project.objects.prefetch_related(
+            "requested_by", "assigned_users", "tasks", "attachments"
+        ).all()
     )
     work_logs = list(
         WorkLog.objects.select_related("project", "task")
@@ -173,6 +194,17 @@ def build_timeline_context(scale="month"):
             other_hours += work_log.actual_hours
             daily_markers[work_log.date.isoformat()]["other"] = True
 
+    # Indices para calcular las horas que "bloquean" cada proyecto sin recorrer
+    # todos los registros dentro del bucle de proyectos (era O(proyectos x registros)).
+    all_hours_index = _hours_index((log.date, log.actual_hours) for log in work_logs)
+    own_hours_entries = defaultdict(list)
+    for work_log in work_logs:
+        if work_log.work_type == WorkLog.WorkType.PROJECT and work_log.project_id:
+            own_hours_entries[work_log.project_id].append((work_log.date, work_log.actual_hours))
+    own_hours_index = {
+        project_id: _hours_index(entries) for project_id, entries in own_hours_entries.items()
+    }
+
     project_summaries = []
     project_display_order = {}
     calendar_events = []
@@ -196,12 +228,10 @@ def build_timeline_context(scale="month"):
 
         blocking_hours = ZERO
         if remaining_hours > ZERO:
-            for work_log in work_logs:
-                if work_log.date < project.planned_start_date:
-                    continue
-                if work_log.work_type == WorkLog.WorkType.PROJECT and work_log.project_id == project.id:
-                    continue
-                blocking_hours += work_log.actual_hours
+            blocking_hours = _hours_since(all_hours_index, project.planned_start_date)
+            own_index = own_hours_index.get(project.id)
+            if own_index is not None:
+                blocking_hours -= _hours_since(own_index, project.planned_start_date)
 
         interruption_delay_days = _days_from_hours(blocking_hours) if blocking_hours > ZERO else 0
         if interruption_delay_days:
@@ -392,9 +422,15 @@ def build_timeline_context(scale="month"):
             ),
         }
 
+    # work_logs ya viene ordenado por -date/-id, asi que los ultimos registros se
+    # cortan de la lista en memoria en vez de repetir la consulta y sus prefetch.
+    recent_logs = work_logs[:RECENT_LOG_COUNT]
+    prefetch_related_objects(recent_logs, "attachments")
+
     return {
         "projects": visible_project_summaries,
         "project_legend": project_summaries,
+        "recent_logs": recent_logs,
         "slots": slots,
         "slot_count": len(slots),
         "scale": scale,
